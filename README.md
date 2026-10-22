@@ -1,304 +1,209 @@
-# PHP2Shell Guard
+<div align="center">
+  <a href="https://php2shell-guard.anwar-labs.workers.dev/">
+    <img src="./public/php2shell.png" alt="PHP2Shell Guard logo" width="112" />
+  </a>
 
-[![CI](https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-Worker%20runtime-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+  <h1>PHP2Shell Guard</h1>
 
-A focused PHP security assessment utility for upstream version evidence, allowlisted website headers, and local CLI diagnostics.
+  <p><strong>Know where your PHP stands.</strong></p>
+  <p>
+    A free, open-source PHP security assessment tool for checking version evidence<br />
+    against official fixes for <strong>CVE-2026-109618</strong> and <strong>CVE-2026-109619</strong>.
+  </p>
 
-Live application: [php2shell-guard.anwar-labs.workers.dev](https://php2shell-guard.anwar-labs.workers.dev/).
+  <p>
+    <a href="https://php2shell-guard.anwar-labs.workers.dev/"><strong>Live application</strong></a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/Anwar0904/php2shell-guard">Source code</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/Anwar0904/php2shell-guard/issues">Report an issue</a>
+  </p>
 
-## Why this project exists
+  <p>
+    <a href="https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml"><img alt="GitHub Actions CI" src="https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml/badge.svg" /></a>
+    <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-0F766E" /></a>
+    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" />
+    <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white" />
+  </p>
+</div>
 
-PHP2Shell Guard was created to help operators and developers assess whether a PHP version is aligned with official upstream fixed releases for two critical PHP advisories without claiming a site is safe or vulnerable based on a single header. The project is intentionally conservative: it favors evidence-driven analysis, clear limits, and developer-controlled checks over broad public scanning.
+---
 
-## What is currently implemented
+## Overview
 
-- A responsive interface with keyboard-accessible tabs for each assessment tool.
-- A crawlable homepage synopsis, canonical and social metadata, and static sitemap and robots resources.
-- Offline comparison of a user-entered PHP version against official upstream fixed releases for:
-  - CVE-2026-109618
-  - CVE-2026-109619
-- Allowlisted public-header check for exact, developer-controlled HTTPS hostnames.
-- A local, read-only PHP CLI diagnostic whose small JSON report is validated and assessed entirely in the browser.
-- Strict input validation and fail-closed behavior for malformed, internal, IP-based, credential-bearing, and non-allowlisted targets.
-- Unit tests covering version assessment logic and mocked Worker scan behavior.
+**PHP2Shell Guard** helps developers and website owners understand what their PHP version *suggests* about exposure to two critical PHP vulnerabilities disclosed in October 2026.
 
-## Supported CVEs and official references
+Instead of providing an unqualified “safe” or “vulnerable” verdict, it explains the evidence, the official upstream fixed version, and what to verify next. You can use the version checker immediately, inspect response headers for approved websites, or run a small diagnostic on a PHP server you control.
 
-The project currently covers the advisories announced by the PHP project on 2026-10-21:
+**No account. No database. No paid API.**
 
-- CVE-2026-109618 — [PHP Security Advisory](https://www.php.net/archive/2026.php#2026-10-21-5)
-- CVE-2026-109619 — [PHP Security Advisory](https://www.php.net/archive/2026.php#2026-10-21-5)
+> [!IMPORTANT]
+> This is an **advisory and version-evidence tool**, not a penetration-testing service. A version string or HTTP header cannot confirm exploitation, installed vendor backports, or the security of an entire website.
 
-Official upstream fixed releases recorded in the project:
+## What you can do
 
-| PHP branch | First fixed upstream release |
-| --- | --- |
-| 8.2 | 8.2.35 |
-| 8.3 | 8.3.36 |
-| 8.4 | 8.4.27 |
-| 8.5 | 8.5.12 |
+| Tool | What it checks | Important boundary |
+| :-- | :-- | :-- |
+| **PHP Version Check** | Compare a manually entered PHP version with published upstream fixed releases for both CVEs. | Evaluates a version string, not a live server. |
+| **Website Check** | Read public HTTP headers from specifically approved HTTPS hosts to find possible PHP version evidence. | **Only operator-allowlisted hostnames**; not an unrestricted URL scanner. |
+| **Server Diagnostic** | Generate a minimal PHP CLI report and assess its JSON locally in your browser. | Inspects **CLI PHP**, which may differ from the web-serving runtime. |
 
-## How version assessment works
+### 1. PHP Version Check
 
-The project validates a PHP version string as a stable `major.minor.patch` value, compares it against the first upstream fixed release for that branch, and returns one of the following statuses:
+Enter a version such as `8.4.26` to get an assessment for **both** supported CVEs, including its evidence and recommended next step. The comparison runs without requesting access to a website.
 
-- `POTENTIALLY_AFFECTED`
-- `UPSTREAM_PATCHED_VERSION`
-- `LEGACY_UNVERIFIED`
-- `UNKNOWN`
+### 2. Website Check
 
-This is strictly version-evidence logic. It does not validate that an application is actually running that version or that a package includes a vendor backport. Unsupported branches, malformed values, prereleases, and unknown branches are treated conservatively as `UNKNOWN` or `LEGACY_UNVERIFIED` rather than receiving a positive verdict.
+For explicitly allowlisted, developer-controlled hosts, the Cloudflare Worker makes one read-only `HEAD` request to the HTTPS site root and examines returned header evidence. Requests to arbitrary hosts are rejected; redirects are not followed. Missing or ambiguous headers produce an inconclusive result.
 
-## Assessment confidence and limits
+### 3. Server Diagnostic
 
-Confidence is intentionally limited to the data being evaluated:
+Download the open-source [PHP diagnostic](./tools/php-diagnostic.php), review it, and run it on a server you control. It records only the PHP version, SAPI, operating-system family, UTC timestamp, schema version, and CLI runtime context.
 
-- A version match reflects upstream release data, not live runtime verification.
-- A public `X-Powered-By` or `Server` header is not proof of the actual PHP version or patch status.
-- Vendor backports can fix a package while leaving the upstream PHP version unchanged.
-- The tool never confirms exploitation or a successful vulnerability in a live site.
-
-## Local PHP server diagnostic
-
-The diagnostic is an optional PHP CLI script for infrastructure you own. It reads only `PHP_VERSION`, `PHP_SAPI`, `PHP_OS_FAMILY` (or `Unknown` on older PHP versions without that constant), and the current UTC timestamp. The report also identifies schema version 1 and the `cli` runtime context.
-
-From the repository root, run:
-
-```sh
+```bash
 php tools/php-diagnostic.php > php-report.json
 ```
 
-Review `php-report.json` locally before sharing it. You can also use **Download diagnostic script** in the application, review the downloaded source, run it with PHP CLI, and import the resulting JSON in **Server Diagnostic**. The browser rejects files over 16 KB, malformed JSON, unsupported schema versions, unexpected fields, invalid versions, non-CLI SAPI values, and invalid timestamps.
+Import `php-report.json` in the **Server Diagnostic** tab. The file is parsed and assessed **in your browser**; its contents are not uploaded to the application. The diagnostic performs no network calls or shell commands and must **not** be exposed as a public PHP endpoint.
 
-The report is parsed with the browser File API and assessed locally using the existing version assessment engine. Its contents are not uploaded, stored, or sent as telemetry. The script does not make network requests, execute shell commands, inspect configuration, or modify files. It must not be exposed or invoked as a web endpoint.
+## Supported vulnerabilities
 
-This is **local CLI diagnostic evidence**, not authenticated evidence: an imported JSON file can be altered. CLI PHP may differ from the PHP runtime serving web traffic. The result does not verify vendor backports, prove a vulnerability, or establish that a system is secure. Check each CVE's official PHP advisory and your package vendor's update guidance.
+The current advisory dataset is sourced from the [PHP security announcement of October 21, 2026](https://www.php.net/archive/2026.php#2026-10-21-5).
 
-## Quick start
+| CVE | Description in the project | Official advisory |
+| :-- | :-- | :-- |
+| `CVE-2026-109618` | Remote code execution risk involving out-of-memory corruption | [PHP advisory](https://www.php.net/archive/2026.php#2026-10-21-5) |
+| `CVE-2026-109619` | Remote code execution risk involving stale global state | [PHP advisory](https://www.php.net/archive/2026.php#2026-10-21-5) |
 
-```sh
-npm install
+**First fixed upstream releases** recorded in the project:
+
+| PHP branch | Fixed release |
+| :-- | :-- |
+| `8.2` | `8.2.35` |
+| `8.3` | `8.3.36` |
+| `8.4` | `8.4.27` |
+| `8.5` | `8.5.12` |
+
+A lower upstream version may still include a **distribution-maintained security backport**. Check your operating system or hosting provider's package advisory before concluding that an installation is vulnerable. Versions outside the documented branches are not automatically assumed to be safe.
+
+### Understanding the results
+
+| Assessment | Meaning |
+| :-- | :-- |
+| **Potentially affected** | The reported upstream version predates the published fix; installed patch status still needs verification. |
+| **Upstream fixed release** | The version string meets the published upstream fixed-version threshold; actual deployment status is not verified. |
+| **Legacy / vendor verification needed** | An older version requires separate vendor or package investigation. |
+| **Unknown / inconclusive** | There is not enough reliable information for a version-based conclusion. |
+
+The application reports its reasoning for each CVE rather than presenting a misleading all-clear indicator.
+
+## Try it locally
+
+**Requirements:** Node.js 22 (recommended) and npm. PHP CLI is optional unless you want to run the local diagnostic.
+
+```bash
+git clone https://github.com/Anwar0904/php2shell-guard.git
+cd php2shell-guard
+npm ci
 npm run dev
 ```
 
-Then open the local Vite URL in a browser.
+Open the local address shown by Vite in your terminal.
 
-## Local development
-
-```sh
-npm install
-npm run dev
-```
-
-For the allowlisted website checker, add a local `.dev.vars` file with exact hostnames you control:
+To enable website checks during local development, create `.dev.vars` with **only exact HTTPS hostnames you own and have approved**:
 
 ```dotenv
-SCAN_ALLOWED_HOSTS=staging.yourdomain.com
+SCAN_ALLOWED_HOSTS=staging.example.com
 ```
 
-Do not add arbitrary public URLs or wildcard entries. The check fails closed when the allowlist is absent or invalid.
+The allowlist is empty by default. Do not use wildcards or populate it with unrelated public websites. The backend enforces the restriction regardless of frontend input validation.
 
-The allowlist is empty by default. Only configure exact hostnames that you control and have explicitly approved for this check. URL checks are enforced by the Worker; client-side form validation is not a security boundary.
+### Commands
 
-## Available npm commands
+| Command | Purpose |
+| :-- | :-- |
+| `npm run dev` | Start the local development server |
+| `npm test` | Run automated tests with Vitest |
+| `npm run build` | Run TypeScript checks and produce the production build |
+| `npm run seo:check` | Validate generated SEO resources (run after building) |
+| `npm run lint` | Run ESLint |
+| `npm run preview` | Preview a production build locally |
+| `npm run deploy` | Build and deploy using Cloudflare Wrangler |
 
-```sh
+For the PHP diagnostic, you can additionally run `php -l tools/php-diagnostic.php` before execution.
+
+## Architecture
+
+```text
+React + Vite + TypeScript
+│
+├── PHP Version Check
+│   └── Local assessment engine + advisory data
+│
+├── Website Check
+│   └── Cloudflare Worker /api/scan
+│       └── Exact-host allowlist → one HTTPS HEAD request
+│
+└── Server Diagnostic
+    └── PHP CLI script → local JSON file → browser-only analysis
+```
+
+**Stack:** React, TypeScript, Vite, Tailwind CSS, Cloudflare Workers, and Vitest. There is **no application database**.
+
+Key paths: [`src/assessment.ts`](./src/assessment.ts) (assessment engine), [`src/data/advisories.ts`](./src/data/advisories.ts) (advisory data), [`worker/scan.ts`](./worker/scan.ts) (restricted website checks), [`src/diagnostic.ts`](./src/diagnostic.ts) (report validation), and [`tools/php-diagnostic.php`](./tools/php-diagnostic.php) (read-only CLI script).
+
+## Privacy and security boundaries
+
+- **Version check:** assesses a provided version string without needing to inspect a server.
+- **Website check:** uses a Cloudflare Worker for network access, with a default-empty exact-host allowlist, HTTPS-only validation, a single `HEAD` request, and redirects disabled.
+- **Server diagnostic:** locally imported JSON is processed in the browser; there is no diagnostic-upload API or persistent scan history.
+- **No active exploitation:** the project does not send vulnerability payloads, perform remote exploit confirmation, or scan arbitrary third-party sites.
+- **No guarantee of safety:** PHP CLI, HTTP headers, and version strings do not independently prove which patches are installed in a live web-serving process.
+
+Only assess systems you own or are explicitly authorized to test. For responsible disclosure of a problem **in PHP2Shell Guard itself**, see [SECURITY.md](./SECURITY.md).
+
+## Deployment
+
+The application runs as a React static frontend with a Cloudflare Worker API. The current public deployment is:
+
+**[php2shell-guard.anwar-labs.workers.dev](https://php2shell-guard.anwar-labs.workers.dev/)**
+
+For a maintainer-controlled deployment:
+
+```bash
+npm ci
 npm test
 npm run build
 npm run seo:check
 npm run lint
-npm run dev
-npm run preview
-npm run deploy
-npm run cf-typegen
+npx wrangler login
+npm run deploy -- --keep-vars
 ```
 
-Run `npm run seo:check` after `npm run build`. It validates generated HTML metadata, structured data, crawlable synopsis, robots directives, sitemap URLs, and built favicon/logo assets.
+Keep `SCAN_ALLOWED_HOSTS` unset in production unless you have specific developer-controlled targets to approve. Deployment does not require MongoDB, user accounts, or a paid API. Hosting remains subject to Cloudflare's plan limits.
 
-## Cloudflare Workers deployment
-
-Deployment is a manual maintainer action; the project does not deploy automatically. The current Worker and static SPA configuration is in [wrangler.jsonc](./wrangler.jsonc), and the GitHub Actions workflow does not deploy.
-
-1. Review the source and required security settings for your environment.
-2. Install dependencies and run validation:
-
-   ```sh
-   npm ci
-   npm test
-   npm run build
-   npm run seo:check
-   npm run lint
-   ```
-
-3. Authenticate Wrangler with an authorized Cloudflare account using the official Wrangler login procedure.
-4. Review the deployment preview and then explicitly run `npm run deploy -- --keep-vars` from a maintainer-controlled environment. This preserves environment variables configured through the Cloudflare dashboard.
-5. If a public website check is needed, configure `SCAN_ALLOWED_HOSTS` in the Worker’s production environment after deployment as a comma-separated list of exact hostnames you control. Leave it unset for a disabled website check. Never use wildcard hostnames or allow targets you do not control.
-6. Verify the deployed static response headers, SPA navigation, and `/api/scan` behavior. With no allowlist configured, a valid scan submission must fail closed and make no outbound request.
-
-The `public/_headers` file defines security headers for static assets. Worker-generated API responses set their own restrictive CSP, no-store caching, referrer, content-type, and frame headers. Static asset headers do not substitute for Worker response headers. Client source maps are not generated, and Wrangler source-map upload is disabled. Do not put credentials in public variables. No deployment or Cloudflare account configuration is performed by this repository’s CI.
-
-### Production verification checklist
-
-- Confirm `SCAN_ALLOWED_HOSTS` is absent or contains only exact, approved developer-owned hostnames.
-- Confirm requests for non-allowlisted hosts fail before any outbound request.
-- Confirm `/api/scan` permits only its documented POST contract and does not follow redirects.
-- Check static responses for CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, and `Permissions-Policy`.
-- Check API responses separately for their Worker-set security headers and `Cache-Control: no-store`.
-- Confirm the browser can assess imported diagnostic JSON without sending report contents.
-- Keep the public URL pointed at the reviewed deployment; do not substitute a preview or local development endpoint.
-
-## Technology stack
-
-- React 19
-- TypeScript
-- Vite 8
-- Tailwind CSS 4
-- Cloudflare Workers
-- Vitest
-
-## Project structure
-
-```text
-.
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   ├── pull_request_template.md
-│   └── workflows/
-├── src/
-│   ├── App.css
-│   ├── App.tsx
-│   ├── assessment-labels.test.ts
-│   ├── assessment-labels.ts
-│   ├── assessment.test.ts
-│   ├── assessment.ts
-│   ├── diagnostic.test.ts
-│   ├── diagnostic.ts
-│   ├── data/
-│   ├── index.css
-│   ├── main.tsx
-│   └── assets/
-├── worker/
-│   ├── index.test.ts
-│   ├── index.ts
-│   ├── scan.ts
-│   └── scan.test.ts
-├── tools/
-│   └── php-diagnostic.php
-├── public/
-│   ├── _headers
-│   ├── favicon.png
-│   ├── php2shell.png
-│   ├── robots.txt
-│   └── sitemap.xml
-├── scripts/
-│   └── validate-seo.mjs
-├── LICENSE
-├── README.md
-├── SECURITY.md
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── eslint.config.js
-├── index.html
-├── package.json
-├── package-lock.json
-├── tsconfig.app.json
-├── tsconfig.node.json
-├── tsconfig.worker.json
-├── vite.config.ts
-├── vitest.config.ts
-├── wrangler.jsonc
-└── worker-configuration.d.ts
-```
-
-## Supported and planned features
-
-| Status | Feature |
-| --- | --- |
-| Implemented | Offline PHP version assessment for the two supported CVEs |
-| Implemented | Public website check against exact allowlisted HTTPS hostnames |
-| Implemented | Strict input validation and fail-closed scanning logic |
-| Implemented | Local PHP CLI diagnostic and client-side JSON import with strict schema validation |
-| Implemented | Responsive, keyboard-accessible three-tab interface and static/API security headers |
-| Implemented | Canonical/social metadata, schema.org descriptions, crawlable synopsis, robots.txt, and sitemap.xml |
-| Implemented | Manual Wrangler deployment path with source-map upload disabled |
-| Planned | Verified web-serving runtime and package diagnostics |
-| Live | Public hosted application at the maintainer-configured Cloudflare Workers URL |
-| Planned | Broader public URL scanning and automated verification workflows |
-
-## Current limitations
-
-- Public checks are deliberately restricted to exact, explicitly allowlisted hostnames.
-- The website checker operates on public headers only and does not verify the actual runtime or vendor packages.
-- The local server diagnostic reports CLI PHP only; web-serving PHP may use a different runtime or configuration.
-- Diagnostic JSON is user-provided and is not authenticated. Reports are only inspected in the local browser and are not uploaded.
-- Vendor package backports are not automatically verified.
-- Arbitrary public URL submissions remain disabled.
-- This project does not perform vulnerability confirmation or exploit testing.
-- It does not persist scan history or add user accounts.
-- Website checks remain safe only for explicitly configured developer-controlled destinations; URL string validation alone is not a DNS rebinding or connection-level defense for arbitrary targets.
-
-## Security considerations
-
-This project intentionally avoids unsafe scanning behavior:
-
-- No arbitrary public scanning.
-- No payload-based exploit testing.
-- No password, auth, or third-party API integration.
-- No HTML crawling or content downloads during the public-check flow.
-- No redirect following in the site check.
-
-The app is designed as an evidence-focused, low-risk assessment utility, not as a general reconnaissance tool.
+The repository's [CI workflow](./.github/workflows/ci.yml) runs automated checks on pushes and pull requests; it does **not** deploy automatically.
 
 ## Roadmap
 
-| Phase | Status | Notes |
-| --- | --- | --- |
-| Milestone 1 | Completed | Offline PHP advisory comparison and version evidence checks |
-| Milestone 2 | Implemented in code | Allowlisted public-header checks with fail-closed validation |
-| Milestone 3 | Implemented | Read-only local CLI diagnostic and browser-only report assessment; not authenticated and not a web-runtime verification |
-| Milestone 4 | Completed | Responsive accessible interface, production headers, and manual Cloudflare deployment path |
-| Verified web-server diagnostics | Planned | Would require an independently reviewed and scope-limited design |
-| Hosted public deployment | Planned | Not yet implemented |
+- [x] PHP advisory version assessment for both supported CVEs
+- [x] Allowlisted HTTPS header inspection
+- [x] Read-only CLI diagnostic with private browser-side JSON import
+- [x] Responsive UI, automated tests, and Cloudflare deployment
+- [x] Basic technical SEO, including metadata, sitemap, and robots directives
+- [ ] More comprehensive, authenticated web-runtime and vendor-package evidence
+- [ ] Broader URL assessment **only if** connection-level safety controls can be validated
+
+Planned items are directions for further development, not available features or release promises.
 
 ## Contributing
 
-Contributions are welcome when they improve the project’s quality, clarity, and security posture. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or pull request.
+Bug reports, documentation improvements, test cases, and careful security reviews are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) and open an [issue](https://github.com/Anwar0904/php2shell-guard/issues) before proposing substantial changes.
 
-## License
+## License and maintainer
 
-This project is licensed under the [MIT License](./LICENSE).
+Released under the [MIT License](./LICENSE). Maintained by [Anwar0904](https://github.com/Anwar0904).
 
-## Maintainer
-
-The repository is maintained by the GitHub owner: [@Anwar0904](https://github.com/Anwar0904).
-
-## Security reporting
-
-Please review [SECURITY.md](./SECURITY.md) before reporting a vulnerability.
-
-## Search engine indexing
-
-The homepage includes a concise HTML synopsis in the initial document as well as the interactive React application. The application remains client-rendered; the synopsis is not a full prerendered copy of every interactive tool. Search engines may render JavaScript differently, and publishing these resources does not guarantee crawling, indexing, rankings, or traffic.
-
-The build publishes `/robots.txt` and `/sitemap.xml` as static assets. The sitemap contains only the canonical homepage. After deploying a change, verify that both routes return their own file contents rather than the SPA document. `robots.txt` is crawler guidance, not an access-control or privacy mechanism.
-
-### Google Search Console
-
-Search Console has not been connected by this repository. The project owner must complete verification:
-
-1. Add a URL-prefix property for `https://php2shell-guard.anwar-labs.workers.dev/`.
-2. Choose one of the verification methods Google offers, such as its provided HTML file, meta tag, or DNS record. Use only the exact token or file Google supplies; do not commit account tokens to this repository.
-3. In Search Console, submit `https://php2shell-guard.anwar-labs.workers.dev/sitemap.xml`.
-4. Inspect the homepage URL, review crawl/indexing status, and request indexing if Google offers that action.
-5. Use the rendered-page inspection to review Google's fetched HTML and JavaScript-rendered page. Resolve any reported access, resource, or rendering issues before requesting another crawl.
-6. Monitor the Performance report for impressions, clicks, and search queries over time. Reports may take time to populate and do not guarantee future visibility.
-
-### Bing Webmaster Tools
-
-The owner may add the same production URL-prefix site to Bing Webmaster Tools, verify ownership using a method and token supplied by Bing, and submit the sitemap URL above. Do not copy verification tokens into source control. Neither Bing nor Google integration is automated by this project.
+<div align="center">
+  <sub>Built for clearer PHP security decisions — with evidence, limitations, and actionable next steps.</sub>
+</div>
