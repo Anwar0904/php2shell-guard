@@ -10,6 +10,8 @@
 
 A focused PHP security assessment utility for upstream version evidence, allowlisted website headers, and local CLI diagnostics.
 
+Live application: [php2shell-guard.anwar-labs.workers.dev](https://php2shell-guard.anwar-labs.workers.dev/).
+
 ## Why this project exists
 
 PHP2Shell Guard was created to help operators and developers assess whether a PHP version is aligned with official upstream fixed releases for two critical PHP advisories without claiming a site is safe or vulnerable based on a single header. The project is intentionally conservative: it favors evidence-driven analysis, clear limits, and developer-controlled checks over broad public scanning.
@@ -17,6 +19,7 @@ PHP2Shell Guard was created to help operators and developers assess whether a PH
 ## What is currently implemented
 
 - A responsive interface with keyboard-accessible tabs for each assessment tool.
+- A crawlable homepage synopsis, canonical and social metadata, and static sitemap and robots resources.
 - Offline comparison of a user-entered PHP version against official upstream fixed releases for:
   - CVE-2026-109618
   - CVE-2026-109619
@@ -108,12 +111,15 @@ The allowlist is empty by default. Only configure exact hostnames that you contr
 ```sh
 npm test
 npm run build
+npm run seo:check
 npm run lint
 npm run dev
 npm run preview
 npm run deploy
 npm run cf-typegen
 ```
+
+Run `npm run seo:check` after `npm run build`. It validates generated HTML metadata, structured data, crawlable synopsis, robots directives, sitemap URLs, and built favicon/logo assets.
 
 ## Cloudflare Workers deployment
 
@@ -126,6 +132,7 @@ Deployment is a manual maintainer action; the project does not deploy automatica
    npm ci
    npm test
    npm run build
+   npm run seo:check
    npm run lint
    ```
 
@@ -144,7 +151,7 @@ The `public/_headers` file defines security headers for static assets. Worker-ge
 - Check static responses for CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, and `Permissions-Policy`.
 - Check API responses separately for their Worker-set security headers and `Cache-Control: no-store`.
 - Confirm the browser can assess imported diagnostic JSON without sending report contents.
-- Confirm no public live-demo URL is documented until a deployment has been intentionally completed and reviewed.
+- Keep the public URL pointed at the reviewed deployment; do not substitute a preview or local development endpoint.
 
 ## Technology stack
 
@@ -184,7 +191,13 @@ The `public/_headers` file defines security headers for static assets. Worker-ge
 ├── tools/
 │   └── php-diagnostic.php
 ├── public/
-│   └── _headers
+│   ├── _headers
+│   ├── favicon.png
+│   ├── php2shell.png
+│   ├── robots.txt
+│   └── sitemap.xml
+├── scripts/
+│   └── validate-seo.mjs
 ├── LICENSE
 ├── README.md
 ├── SECURITY.md
@@ -212,9 +225,10 @@ The `public/_headers` file defines security headers for static assets. Worker-ge
 | Implemented | Strict input validation and fail-closed scanning logic |
 | Implemented | Local PHP CLI diagnostic and client-side JSON import with strict schema validation |
 | Implemented | Responsive, keyboard-accessible three-tab interface and static/API security headers |
+| Implemented | Canonical/social metadata, schema.org descriptions, crawlable synopsis, robots.txt, and sitemap.xml |
 | Implemented | Manual Wrangler deployment path with source-map upload disabled |
 | Planned | Verified web-serving runtime and package diagnostics |
-| Planned | Public hosted deployment |
+| Live | Public hosted application at the maintainer-configured Cloudflare Workers URL |
 | Planned | Broader public URL scanning and automated verification workflows |
 
 ## Current limitations
@@ -248,7 +262,7 @@ The app is designed as an evidence-focused, low-risk assessment utility, not as 
 | Milestone 1 | Completed | Offline PHP advisory comparison and version evidence checks |
 | Milestone 2 | Implemented in code | Allowlisted public-header checks with fail-closed validation |
 | Milestone 3 | Implemented | Read-only local CLI diagnostic and browser-only report assessment; not authenticated and not a web-runtime verification |
-| Milestone 4 | Completed | Responsive accessible interface, production headers, and deployment-readiness checks; not deployed |
+| Milestone 4 | Completed | Responsive accessible interface, production headers, and manual Cloudflare deployment path |
 | Verified web-server diagnostics | Planned | Would require an independently reviewed and scope-limited design |
 | Hosted public deployment | Planned | Not yet implemented |
 
@@ -267,3 +281,24 @@ The repository is maintained by the GitHub owner: [@Anwar0904](https://github.co
 ## Security reporting
 
 Please review [SECURITY.md](./SECURITY.md) before reporting a vulnerability.
+
+## Search engine indexing
+
+The homepage includes a concise HTML synopsis in the initial document as well as the interactive React application. The application remains client-rendered; the synopsis is not a full prerendered copy of every interactive tool. Search engines may render JavaScript differently, and publishing these resources does not guarantee crawling, indexing, rankings, or traffic.
+
+The build publishes `/robots.txt` and `/sitemap.xml` as static assets. The sitemap contains only the canonical homepage. After deploying a change, verify that both routes return their own file contents rather than the SPA document. `robots.txt` is crawler guidance, not an access-control or privacy mechanism.
+
+### Google Search Console
+
+Search Console has not been connected by this repository. The project owner must complete verification:
+
+1. Add a URL-prefix property for `https://php2shell-guard.anwar-labs.workers.dev/`.
+2. Choose one of the verification methods Google offers, such as its provided HTML file, meta tag, or DNS record. Use only the exact token or file Google supplies; do not commit account tokens to this repository.
+3. In Search Console, submit `https://php2shell-guard.anwar-labs.workers.dev/sitemap.xml`.
+4. Inspect the homepage URL, review crawl/indexing status, and request indexing if Google offers that action.
+5. Use the rendered-page inspection to review Google's fetched HTML and JavaScript-rendered page. Resolve any reported access, resource, or rendering issues before requesting another crawl.
+6. Monitor the Performance report for impressions, clicks, and search queries over time. Reports may take time to populate and do not guarantee future visibility.
+
+### Bing Webmaster Tools
+
+The owner may add the same production URL-prefix site to Bing Webmaster Tools, verify ownership using a method and token supplied by Bing, and submit the sitemap URL above. Do not copy verification tokens into source control. Neither Bing nor Google integration is automated by this project.

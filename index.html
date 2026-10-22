@@ -5,11 +5,67 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f8faf9" />
-    <meta name="description" content="Assess PHP version evidence against official security advisories with offline checks, allowlisted public headers, and local CLI diagnostics." />
-    <title>PHP2Shell Guard — PHP security advisory checks</title>
+    <meta name="description" content="Check PHP version evidence for CVE-2026-109618 and CVE-2026-109619, compare upstream fixes, and assess a local PHP CLI report in your browser." />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://php2shell-guard.anwar-labs.workers.dev/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="PHP2Shell Guard — PHP Version &amp; CVE Security Checker" />
+    <meta property="og:description" content="Check PHP version evidence for two official advisories, review upstream fixes, and assess a local CLI report in your browser." />
+    <meta property="og:url" content="https://php2shell-guard.anwar-labs.workers.dev/" />
+    <meta property="og:site_name" content="PHP2Shell Guard" />
+    <meta property="og:image" content="https://php2shell-guard.anwar-labs.workers.dev/php2shell.png" />
+    <meta property="og:image:alt" content="PHP2Shell Guard shield and code logo" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PHP2Shell Guard — PHP Version &amp; CVE Security Checker" />
+    <meta name="twitter:description" content="Check PHP version evidence for two official advisories, review upstream fixes, and assess a local CLI report in your browser." />
+    <meta name="twitter:image" content="https://php2shell-guard.anwar-labs.workers.dev/php2shell.png" />
+    <meta name="twitter:image:alt" content="PHP2Shell Guard shield and code logo" />
+    <title>PHP2Shell Guard — PHP Version &amp; CVE Security Checker</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "PHP2Shell Guard",
+            "url": "https://php2shell-guard.anwar-labs.workers.dev/",
+            "description": "A PHP security assessment utility for upstream version evidence, allowlisted website headers, and local CLI diagnostics."
+          },
+          {
+            "@type": "WebApplication",
+            "name": "PHP2Shell Guard",
+            "url": "https://php2shell-guard.anwar-labs.workers.dev/",
+            "description": "Assess PHP version evidence for CVE-2026-109618 and CVE-2026-109619 with offline checks, allowlisted public headers, and local PHP CLI diagnostics.",
+            "applicationCategory": "SecurityApplication",
+            "operatingSystem": "Any",
+            "isAccessibleForFree": true
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main>
+        <h1>Know where your PHP stands.</h1>
+        <p>PHP2Shell Guard compares PHP version evidence with official upstream security advisories and gives clear next steps.</p>
+        <section aria-labelledby="supported-advisories">
+          <h2 id="supported-advisories">Supported PHP security advisories</h2>
+          <ul>
+            <li><a href="https://www.php.net/archive/2026.php#2026-10-21-5">CVE-2026-109618</a></li>
+            <li><a href="https://www.php.net/archive/2026.php#2026-10-21-5">CVE-2026-109619</a></li>
+          </ul>
+          <p>Upstream fixed releases listed for PHP branches 8.2, 8.3, 8.4, and 8.5 are 8.2.35, 8.3.36, 8.4.27, and 8.5.12.</p>
+        </section>
+        <section aria-labelledby="assessment-method">
+          <h2 id="assessment-method">How the assessment works</h2>
+          <p>The version checker compares stable version numbers with the first fixed upstream release for a supported branch. Vendor packages may backport fixes without changing the PHP version number, so package status must be confirmed with its vendor.</p>
+          <p>The optional website check reads headers only for explicitly allowlisted HTTPS hosts. The local diagnostic reports PHP CLI information and its JSON report is assessed in this browser, not uploaded. CLI PHP may differ from the runtime used by a web server.</p>
+        </section>
+        <p>These checks provide limited evidence. They do not verify the web-serving runtime, confirm vendor backports, or prove that a system is secure or vulnerable.</p>
+        <p><a href="https://www.php.net/archive/2026.php#2026-10-21-5">Read the official PHP advisory</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

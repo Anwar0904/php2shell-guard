@@ -642,6 +642,30 @@ function App() {
             </a>
           </div>
         </section>
+
+        <section className="assessment-guide" aria-labelledby="assessment-guide-heading">
+          <div className="assessment-guide__intro">
+            <p className="eyebrow">Assessment boundaries</p>
+            <h2 id="assessment-guide-heading">Understand what each check can tell you.</h2>
+          </div>
+          <div className="assessment-guide__items">
+            <article>
+              <h3>Upstream version evidence</h3>
+              <p>The version checker compares stable PHP version numbers with published upstream fixes. A potentially affected result is a reason to review your package and update guidance, not proof of a vulnerability.</p>
+            </article>
+            <article>
+              <h3>Allowlisted response headers</h3>
+              <p>The website check reads one response from an explicitly approved HTTPS hostname. Headers can be absent or spoofed and do not confirm which runtime served a request.</p>
+            </article>
+            <article>
+              <h3>Local PHP CLI diagnostic</h3>
+              <p>The diagnostic report is read in this browser and is not uploaded. CLI PHP may differ from the PHP runtime used by a web server.</p>
+            </article>
+          </div>
+          <p className="assessment-guide__note">
+            Vendor packages may backport security fixes without changing the upstream PHP version. Confirm patch status with your operating-system or hosting vendor.
+          </p>
+        </section>
       </main>
       <AppFooter />
     </div>
