@@ -20,6 +20,7 @@ PHP2Shell Guard was created to help operators and developers assess whether a PH
   - CVE-2026-109618
   - CVE-2026-109619
 - Allowlisted public-header check for exact, developer-controlled HTTPS hostnames.
+- A local, read-only PHP CLI diagnostic whose small JSON report is validated and assessed entirely in the browser.
 - Strict input validation and fail-closed behavior for malformed, internal, IP-based, credential-bearing, and non-allowlisted targets.
 - Unit tests covering version assessment logic and mocked Worker scan behavior.
 
@@ -58,6 +59,22 @@ Confidence is intentionally limited to the data being evaluated:
 - A public `X-Powered-By` or `Server` header is not proof of the actual PHP version or patch status.
 - Vendor backports can fix a package while leaving the upstream PHP version unchanged.
 - The tool never confirms exploitation or a successful vulnerability in a live site.
+
+## Local PHP server diagnostic
+
+The diagnostic is an optional PHP CLI script for infrastructure you own. It reads only `PHP_VERSION`, `PHP_SAPI`, `PHP_OS_FAMILY` (or `Unknown` on older PHP versions without that constant), and the current UTC timestamp. The report also identifies schema version 1 and the `cli` runtime context.
+
+From the repository root, run:
+
+```sh
+php tools/php-diagnostic.php > php-report.json
+```
+
+Review `php-report.json` locally before sharing it. You can also use **Download diagnostic script** in the application, review the downloaded source, run it with PHP CLI, and import the resulting JSON in **Server Diagnostic**. The browser rejects files over 16 KB, malformed JSON, unsupported schema versions, unexpected fields, invalid versions, non-CLI SAPI values, and invalid timestamps.
+
+The report is parsed with the browser File API and assessed locally using the existing version assessment engine. Its contents are not uploaded, stored, or sent as telemetry. The script does not make network requests, execute shell commands, inspect configuration, or modify files. It must not be exposed or invoked as a web endpoint.
+
+This is **local CLI diagnostic evidence**, not authenticated evidence: an imported JSON file can be altered. CLI PHP may differ from the PHP runtime serving web traffic. The result does not verify vendor backports, prove a vulnerability, or establish that a system is secure. Check each CVE's official PHP advisory and your package vendor's update guidance.
 
 ## Screenshot
 
@@ -121,6 +138,8 @@ npm run cf-typegen
 │   ├── App.tsx
 │   ├── assessment.test.ts
 │   ├── assessment.ts
+│   ├── diagnostic.test.ts
+│   ├── diagnostic.ts
 │   ├── data/
 │   ├── index.css
 │   ├── main.tsx
@@ -129,6 +148,8 @@ npm run cf-typegen
 │   ├── index.ts
 │   ├── scan.ts
 │   └── scan.test.ts
+├── tools/
+│   └── php-diagnostic.php
 ├── LICENSE
 ├── README.md
 ├── SECURITY.md
@@ -154,7 +175,8 @@ npm run cf-typegen
 | Implemented | Offline PHP version assessment for the two supported CVEs |
 | Implemented | Public website check against exact allowlisted HTTPS hostnames |
 | Implemented | Strict input validation and fail-closed scanning logic |
-| Planned | Verified server-side runtime diagnostics |
+| Implemented | Local PHP CLI diagnostic and client-side JSON import with strict schema validation |
+| Planned | Verified web-serving runtime and package diagnostics |
 | Planned | Public hosted deployment |
 | Planned | Broader public URL scanning and automated verification workflows |
 
@@ -162,6 +184,9 @@ npm run cf-typegen
 
 - Public checks are deliberately restricted to exact, explicitly allowlisted hostnames.
 - The website checker operates on public headers only and does not verify the actual runtime or vendor packages.
+- The local server diagnostic reports CLI PHP only; web-serving PHP may use a different runtime or configuration.
+- Diagnostic JSON is user-provided and is not authenticated. Reports are only inspected in the local browser and are not uploaded.
+- Vendor package backports are not automatically verified.
 - Arbitrary public URL submissions remain disabled.
 - This project does not perform vulnerability confirmation or exploit testing.
 - It does not persist scan history or add user accounts.
@@ -184,7 +209,8 @@ The app is designed as an evidence-focused, low-risk assessment utility, not as 
 | --- | --- | --- |
 | Milestone 1 | Completed | Offline PHP advisory comparison and version evidence checks |
 | Milestone 2 | Implemented in code | Allowlisted public-header checks with fail-closed validation |
-| Verified server diagnostics | Planned | Requires a fully reviewed and scope-limited runtime verification design |
+| Milestone 3 | Implemented | Read-only local CLI diagnostic and browser-only report assessment; not authenticated and not a web-runtime verification |
+| Verified web-server diagnostics | Planned | Would require an independently reviewed and scope-limited design |
 | Hosted public deployment | Planned | Not yet implemented |
 
 ## Contributing

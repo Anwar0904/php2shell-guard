@@ -29,3 +29,7 @@ dist-ssr
 !.dev.vars.example
 .env*
 !.env.example
+
+# Local reports from tools/php-diagnostic.php
+php-report.json
+*.php-diagnostic-report.json

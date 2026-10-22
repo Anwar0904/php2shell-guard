@@ -1,6 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { assessPhpVersion, type AssessmentStatus, type VersionAssessment } from './assessment'
 import { PHP_SECURITY_ADVISORY } from './data/advisories'
+import {
+  analyzeDiagnosticReport,
+  MAX_DIAGNOSTIC_REPORT_BYTES,
+  type DiagnosticAnalysis,
+} from './diagnostic'
+import phpDiagnosticSource from '../tools/php-diagnostic.php?raw'
 import './App.css'
 
 const statusLabels: Record<AssessmentStatus, string> = {
@@ -227,6 +233,172 @@ function PublicWebsiteCheck() {
   )
 }
 
+function downloadDiagnosticScript() {
+  const file = new Blob([phpDiagnosticSource], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(file)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'php-diagnostic.php'
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+function ServerDiagnostic() {
+  const [analysis, setAnalysis] = useState<DiagnosticAnalysis | null>(null)
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (!file) return
+
+    setAnalysis(null)
+    setError('')
+    if (file.size > MAX_DIAGNOSTIC_REPORT_BYTES) {
+      setError(`Choose a JSON report no larger than ${MAX_DIAGNOSTIC_REPORT_BYTES / 1024} KB.`)
+      input.value = ''
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const contents = await file.text()
+      setAnalysis(analyzeDiagnosticReport(contents))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The diagnostic report could not be read.')
+      input.value = ''
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <section className="diagnostic-panel" aria-labelledby="diagnostic-heading">
+      <div className="diagnostic-panel__heading">
+        <div>
+          <p className="eyebrow"><span className="eyebrow-line" /> LOCAL · READ-ONLY</p>
+          <h2 id="diagnostic-heading">Server Diagnostic</h2>
+          <p className="diagnostic-panel__intro">
+            Inspect the PHP CLI runtime on infrastructure you control, then import its small JSON report
+            for an offline version assessment.
+          </p>
+        </div>
+        <span className="diagnostic-panel__badge"><span className="offline-dot" /> No report upload</span>
+      </div>
+
+      <div className="diagnostic-steps">
+        <div className="diagnostic-step">
+          <span className="diagnostic-step__number">1</span>
+          <div>
+            <h3>Download the script</h3>
+            <p>Review the PHP source before running it on your own server.</p>
+            <button className="secondary-button" type="button" onClick={downloadDiagnosticScript}>
+              Download diagnostic script
+            </button>
+          </div>
+        </div>
+        <div className="diagnostic-step">
+          <span className="diagnostic-step__number">2</span>
+          <div>
+            <h3>Run it in your terminal</h3>
+            <p>From the directory containing the downloaded script, run:</p>
+            <code className="diagnostic-command">php php-diagnostic.php &gt; php-report.json</code>
+            <p>Inspect the JSON locally before choosing whether to share it.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="diagnostic-import">
+        <label htmlFor="diagnostic-file">Import diagnostic JSON</label>
+        <input
+          id="diagnostic-file"
+          name="diagnostic-file"
+          type="file"
+          accept=".json,application/json"
+          onChange={handleFileChange}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? 'diagnostic-error diagnostic-help' : 'diagnostic-help'}
+          disabled={isLoading}
+        />
+        {error && <p className="input-error" id="diagnostic-error" role="alert">{error}</p>}
+        {isLoading && (
+          <p className="diagnostic-loading" role="status">
+            <span className="loading-spinner" aria-hidden="true" /> Validating report locally…
+          </p>
+        )}
+        <p className="field-help" id="diagnostic-help">
+          Maximum file size: {MAX_DIAGNOSTIC_REPORT_BYTES / 1024} KB. Only the expected report fields are accepted.
+          The file is read in this browser and is not sent to the backend.
+        </p>
+      </div>
+
+      {analysis && (
+        <section className="diagnostic-result" aria-live="polite" aria-labelledby="diagnostic-result-heading">
+          <div className="diagnostic-result__heading">
+            <div>
+              <p className="eyebrow">Local diagnostic evidence</p>
+              <h3 id="diagnostic-result-heading">PHP <code>{analysis.report.phpVersion}</code> · CLI</h3>
+            </div>
+            <span className={`overall-status overall-status--${analysis.assessment.status.toLowerCase()}`}>
+              <StatusMark status={analysis.assessment.status} />
+              {statusLabels[analysis.assessment.status]}
+            </span>
+          </div>
+
+          <dl className="diagnostic-runtime">
+            <div><dt>Runtime context</dt><dd>CLI ({analysis.report.sapi})</dd></div>
+            <div><dt>Operating system family</dt><dd>{analysis.report.osFamily}</dd></div>
+            <div>
+              <dt>Diagnostic timestamp (UTC)</dt>
+              <dd><time dateTime={analysis.report.diagnosticTimestamp}>{analysis.report.diagnosticTimestamp}</time></dd>
+            </div>
+          </dl>
+
+          <div className="cve-list">
+            {analysis.assessment.vulnerabilities.map((vulnerability) => (
+              <article className="cve-card" key={vulnerability.cveId}>
+                <div className="cve-card__topline">
+                  <span className="cve-id">{vulnerability.cveId}</span>
+                  <span className={`cve-status cve-status--${vulnerability.status.toLowerCase()}`}>
+                    {statusLabels[vulnerability.status]}
+                  </span>
+                </div>
+                <h3>{vulnerability.title}</h3>
+                <p>{vulnerability.evidence}</p>
+                <p className="recommendation"><strong>Recommended next step:</strong> {vulnerability.recommendation}</p>
+                <a className="source-link diagnostic-source-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
+                  Official PHP advisory <span aria-hidden="true">↗</span>
+                </a>
+              </article>
+            ))}
+          </div>
+
+          <div className="evidence-note">
+            <span className="evidence-note__icon" aria-hidden="true">i</span>
+            <p>
+              <strong>Evidence &amp; confidence</strong> This report is user-provided and is not authenticated.
+              {` ${analysis.assessment.confidenceExplanation} `}
+              It describes CLI PHP only, which may differ from PHP serving web traffic. Vendor backports are not
+              verified, and this assessment does not prove a vulnerability or establish that a system is secure.
+            </p>
+          </div>
+        </section>
+      )}
+
+      <div className="public-check__warning">
+        <span className="scope-note__icon" aria-hidden="true">i</span>
+        <p>
+          <strong>Read-only and local:</strong> the script makes no network requests and changes no files.
+          Do not run it through a web server. It collects only the PHP version, CLI SAPI, OS family, and UTC timestamp.
+        </p>
+      </div>
+    </section>
+  )
+}
+
 function ResultPanel({ result }: { result: VersionAssessment }) {
   const isUnknown = result.status === 'UNKNOWN'
 
@@ -398,21 +570,23 @@ function App() {
 
         <PublicWebsiteCheck />
 
+        <ServerDiagnostic />
+
         <section className="scope-note" aria-label="Assessment limitations">
           <div className="scope-note__icon" aria-hidden="true">i</div>
           <div>
             <h2>Version assessment is not vulnerability testing</h2>
             <p>
-              The version check is offline; the website check makes one HEAD request only to exact allowlisted hosts.
-              Neither verifies server packages or vendor backports. A patched-version result is evidence about a
-              version string—not proof that an installation is secure.
+              Version assessments are based on supplied evidence. The website check makes one HEAD request only
+              to exact allowlisted hosts, while the server diagnostic inspects only CLI PHP. None verifies the
+              web-serving runtime or vendor backports, and none proves an installation is secure.
             </p>
           </div>
         </section>
       </main>
 
       <footer className="footer">
-        <span>PHP2Shell Guard <span aria-hidden="true">·</span> Milestone 2: public-header assessment</span>
+        <span>PHP2Shell Guard <span aria-hidden="true">·</span> Local CLI diagnostics</span>
         <a href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
           Source verified {PHP_SECURITY_ADVISORY.lastVerified}
         </a>
