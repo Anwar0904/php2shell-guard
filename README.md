@@ -1,14 +1,14 @@
 # PHP2Shell Guard
 
 [![CI](https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-Worker%20runtime-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-A focused, low-noise PHP security assessment tool for upstream version evidence and safe, developer-controlled website header checks.
+A focused PHP security assessment utility for upstream version evidence, allowlisted website headers, and local CLI diagnostics.
 
 ## Why this project exists
 
@@ -16,6 +16,7 @@ PHP2Shell Guard was created to help operators and developers assess whether a PH
 
 ## What is currently implemented
 
+- A responsive interface with keyboard-accessible tabs for each assessment tool.
 - Offline comparison of a user-entered PHP version against official upstream fixed releases for:
   - CVE-2026-109618
   - CVE-2026-109619
@@ -76,10 +77,6 @@ The report is parsed with the browser File API and assessed locally using the ex
 
 This is **local CLI diagnostic evidence**, not authenticated evidence: an imported JSON file can be altered. CLI PHP may differ from the PHP runtime serving web traffic. The result does not verify vendor backports, prove a vulnerability, or establish that a system is secure. Check each CVE's official PHP advisory and your package vendor's update guidance.
 
-## Screenshot
-
-![Current application UI](./src/assets/hero.png)
-
 ## Quick start
 
 ```sh
@@ -104,6 +101,8 @@ SCAN_ALLOWED_HOSTS=staging.yourdomain.com
 
 Do not add arbitrary public URLs or wildcard entries. The check fails closed when the allowlist is absent or invalid.
 
+The allowlist is empty by default. Only configure exact hostnames that you control and have explicitly approved for this check. URL checks are enforced by the Worker; client-side form validation is not a security boundary.
+
 ## Available npm commands
 
 ```sh
@@ -115,6 +114,37 @@ npm run preview
 npm run deploy
 npm run cf-typegen
 ```
+
+## Cloudflare Workers deployment
+
+Deployment is a manual maintainer action; the project does not deploy automatically. The current Worker and static SPA configuration is in [wrangler.jsonc](./wrangler.jsonc), and the GitHub Actions workflow does not deploy.
+
+1. Review the source and required security settings for your environment.
+2. Install dependencies and run validation:
+
+   ```sh
+   npm ci
+   npm test
+   npm run build
+   npm run lint
+   ```
+
+3. Authenticate Wrangler with an authorized Cloudflare account using the official Wrangler login procedure.
+4. Review the deployment preview and then explicitly run `npm run deploy -- --keep-vars` from a maintainer-controlled environment. This preserves environment variables configured through the Cloudflare dashboard.
+5. If a public website check is needed, configure `SCAN_ALLOWED_HOSTS` in the Worker’s production environment after deployment as a comma-separated list of exact hostnames you control. Leave it unset for a disabled website check. Never use wildcard hostnames or allow targets you do not control.
+6. Verify the deployed static response headers, SPA navigation, and `/api/scan` behavior. With no allowlist configured, a valid scan submission must fail closed and make no outbound request.
+
+The `public/_headers` file defines security headers for static assets. Worker-generated API responses set their own restrictive CSP, no-store caching, referrer, content-type, and frame headers. Static asset headers do not substitute for Worker response headers. Client source maps are not generated, and Wrangler source-map upload is disabled. Do not put credentials in public variables. No deployment or Cloudflare account configuration is performed by this repository’s CI.
+
+### Production verification checklist
+
+- Confirm `SCAN_ALLOWED_HOSTS` is absent or contains only exact, approved developer-owned hostnames.
+- Confirm requests for non-allowlisted hosts fail before any outbound request.
+- Confirm `/api/scan` permits only its documented POST contract and does not follow redirects.
+- Check static responses for CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, and `Permissions-Policy`.
+- Check API responses separately for their Worker-set security headers and `Cache-Control: no-store`.
+- Confirm the browser can assess imported diagnostic JSON without sending report contents.
+- Confirm no public live-demo URL is documented until a deployment has been intentionally completed and reviewed.
 
 ## Technology stack
 
@@ -136,6 +166,8 @@ npm run cf-typegen
 ├── src/
 │   ├── App.css
 │   ├── App.tsx
+│   ├── assessment-labels.test.ts
+│   ├── assessment-labels.ts
 │   ├── assessment.test.ts
 │   ├── assessment.ts
 │   ├── diagnostic.test.ts
@@ -145,11 +177,14 @@ npm run cf-typegen
 │   ├── main.tsx
 │   └── assets/
 ├── worker/
+│   ├── index.test.ts
 │   ├── index.ts
 │   ├── scan.ts
 │   └── scan.test.ts
 ├── tools/
 │   └── php-diagnostic.php
+├── public/
+│   └── _headers
 ├── LICENSE
 ├── README.md
 ├── SECURITY.md
@@ -176,6 +211,8 @@ npm run cf-typegen
 | Implemented | Public website check against exact allowlisted HTTPS hostnames |
 | Implemented | Strict input validation and fail-closed scanning logic |
 | Implemented | Local PHP CLI diagnostic and client-side JSON import with strict schema validation |
+| Implemented | Responsive, keyboard-accessible three-tab interface and static/API security headers |
+| Implemented | Manual Wrangler deployment path with source-map upload disabled |
 | Planned | Verified web-serving runtime and package diagnostics |
 | Planned | Public hosted deployment |
 | Planned | Broader public URL scanning and automated verification workflows |
@@ -190,6 +227,7 @@ npm run cf-typegen
 - Arbitrary public URL submissions remain disabled.
 - This project does not perform vulnerability confirmation or exploit testing.
 - It does not persist scan history or add user accounts.
+- Website checks remain safe only for explicitly configured developer-controlled destinations; URL string validation alone is not a DNS rebinding or connection-level defense for arbitrary targets.
 
 ## Security considerations
 
@@ -210,6 +248,7 @@ The app is designed as an evidence-focused, low-risk assessment utility, not as 
 | Milestone 1 | Completed | Offline PHP advisory comparison and version evidence checks |
 | Milestone 2 | Implemented in code | Allowlisted public-header checks with fail-closed validation |
 | Milestone 3 | Implemented | Read-only local CLI diagnostic and browser-only report assessment; not authenticated and not a web-runtime verification |
+| Milestone 4 | Completed | Responsive accessible interface, production headers, and deployment-readiness checks; not deployed |
 | Verified web-server diagnostics | Planned | Would require an independently reviewed and scope-limited design |
 | Hosted public deployment | Planned | Not yet implemented |
 

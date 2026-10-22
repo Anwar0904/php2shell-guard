@@ -1,5 +1,12 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import {
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react'
 import { assessPhpVersion, type AssessmentStatus, type VersionAssessment } from './assessment'
+import { assessmentStatusLabels } from './assessment-labels'
 import { PHP_SECURITY_ADVISORY } from './data/advisories'
 import {
   analyzeDiagnosticReport,
@@ -9,12 +16,13 @@ import {
 import phpDiagnosticSource from '../tools/php-diagnostic.php?raw'
 import './App.css'
 
-const statusLabels: Record<AssessmentStatus, string> = {
-  POTENTIALLY_AFFECTED: 'Potentially affected',
-  UPSTREAM_PATCHED_VERSION: 'Upstream fixed release',
-  LEGACY_UNVERIFIED: 'Legacy / vendor check needed',
-  UNKNOWN: 'Unknown',
-}
+const tabs = [
+  { id: 'version', label: 'PHP Version' },
+  { id: 'website', label: 'Website Check' },
+  { id: 'diagnostic', label: 'Server Diagnostic' },
+] as const
+
+type ToolTab = (typeof tabs)[number]['id']
 
 interface PublicScanResult {
   status: 'ASSESSED' | 'INCONCLUSIVE'
@@ -25,6 +33,12 @@ interface PublicScanResult {
   versionAssessment: VersionAssessment | null
 }
 
+const vulnerabilityKeys = ['cveId', 'title', 'status', 'evidence', 'recommendation']
+
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))
+}
+
 function isAssessmentStatus(value: unknown): value is AssessmentStatus {
   return value === 'POTENTIALLY_AFFECTED'
     || value === 'UPSTREAM_PATCHED_VERSION'
@@ -33,24 +47,37 @@ function isAssessmentStatus(value: unknown): value is AssessmentStatus {
 }
 
 function isVersionAssessment(value: unknown): value is VersionAssessment {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const assessment = value as Record<string, unknown>
   if (
-    typeof assessment.input !== 'string'
+    !hasExactKeys(assessment, [
+      'input',
+      'version',
+      'status',
+      'summary',
+      'recommendation',
+      'confidenceExplanation',
+      'vulnerabilities',
+    ])
+    || typeof assessment.input !== 'string'
+    || assessment.input.length > 128
     || !(typeof assessment.version === 'string' || assessment.version === null)
+    || (typeof assessment.version === 'string' && assessment.version.length > 32)
     || !isAssessmentStatus(assessment.status)
     || typeof assessment.summary !== 'string'
     || typeof assessment.recommendation !== 'string'
     || typeof assessment.confidenceExplanation !== 'string'
     || !Array.isArray(assessment.vulnerabilities)
+    || assessment.vulnerabilities.length !== PHP_SECURITY_ADVISORY.vulnerabilities.length
   ) {
     return false
   }
 
-  return assessment.vulnerabilities.every((entry: unknown) => {
-    if (typeof entry !== 'object' || entry === null) return false
+  return assessment.vulnerabilities.every((entry: unknown, index: number) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false
     const vulnerability = entry as Record<string, unknown>
-    return typeof vulnerability.cveId === 'string'
+    return hasExactKeys(vulnerability, vulnerabilityKeys)
+      && vulnerability.cveId === PHP_SECURITY_ADVISORY.vulnerabilities[index]?.cveId
       && typeof vulnerability.title === 'string'
       && isAssessmentStatus(vulnerability.status)
       && typeof vulnerability.evidence === 'string'
@@ -59,23 +86,171 @@ function isVersionAssessment(value: unknown): value is VersionAssessment {
 }
 
 function isPublicScanResult(value: unknown): value is PublicScanResult {
-  if (typeof value !== 'object' || value === null) return false
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const result = value as Record<string, unknown>
-  return (result.status === 'ASSESSED' || result.status === 'INCONCLUSIVE')
+  return hasExactKeys(result, [
+    'status',
+    'phpVersion',
+    'summary',
+    'evidence',
+    'httpStatus',
+    'versionAssessment',
+  ])
+    && (result.status === 'ASSESSED' || result.status === 'INCONCLUSIVE')
     && (typeof result.phpVersion === 'string' || result.phpVersion === null)
     && typeof result.summary === 'string'
     && typeof result.evidence === 'string'
     && typeof result.httpStatus === 'number'
+    && Number.isInteger(result.httpStatus)
+    && result.httpStatus >= 100
+    && result.httpStatus <= 599
     && (result.versionAssessment === null || isVersionAssessment(result.versionAssessment))
 }
 
 function StatusMark({ status }: { status: AssessmentStatus }) {
-  return <span className={`status-mark status-mark--${status.toLowerCase()}`} aria-hidden="true">
-    {status === 'UPSTREAM_PATCHED_VERSION' ? '✓' : status === 'POTENTIALLY_AFFECTED' ? '!' : '?'}
-  </span>
+  const symbol = status === 'UPSTREAM_PATCHED_VERSION'
+    ? '✓'
+    : status === 'POTENTIALLY_AFFECTED' ? '!' : '?'
+
+  return (
+    <span className={`status-mark status-mark--${status.toLowerCase()}`} aria-hidden="true">
+      {symbol}
+    </span>
+  )
 }
 
-function PublicWebsiteCheck() {
+function AssessmentResult({
+  assessment,
+  source,
+  description,
+}: {
+  assessment: VersionAssessment
+  source: string
+  description: string
+}) {
+  const headingId = `result-${source.toLowerCase().replaceAll(' ', '-')}-heading`
+
+  return (
+    <section className="result-panel" aria-live="polite" aria-labelledby={headingId}>
+      <div className="result-panel__header">
+        <div>
+          <p className="eyebrow">Assessment result · {source}</p>
+          <h3 id={headingId}>
+            {assessment.version ? <>PHP <code>{assessment.version}</code></> : 'Version could not be assessed'}
+          </h3>
+          <p className="result-panel__description">{description}</p>
+        </div>
+        <span className={`status-pill status-pill--${assessment.status.toLowerCase()}`}>
+          <StatusMark status={assessment.status} />
+          {assessmentStatusLabels[assessment.status]}
+        </span>
+      </div>
+
+      {assessment.status === 'UNKNOWN' && <p className="result-notice">{assessment.summary}</p>}
+
+      <div className="cve-list">
+        {assessment.vulnerabilities.map((vulnerability) => (
+          <article className="cve-card" key={vulnerability.cveId}>
+            <div className="cve-card__topline">
+              <span className="cve-id">{vulnerability.cveId}</span>
+              <span className={`cve-status cve-status--${vulnerability.status.toLowerCase()}`}>
+                <StatusMark status={vulnerability.status} />
+                {assessmentStatusLabels[vulnerability.status]}
+              </span>
+            </div>
+            <h4>{vulnerability.title}</h4>
+            <p>{vulnerability.evidence}</p>
+            <p className="recommendation">
+              <strong>Recommended next step</strong>
+              {vulnerability.recommendation}
+            </p>
+          </article>
+        ))}
+      </div>
+
+      <div className="result-panel__footer">
+        <p className="evidence-copy">{assessment.confidenceExplanation}</p>
+        <a className="text-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
+          Read the official PHP advisory <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </section>
+  )
+}
+
+function VersionChecker() {
+  const [phpVersion, setPhpVersion] = useState('')
+  const [result, setResult] = useState<VersionAssessment | null>(null)
+  const [error, setError] = useState('')
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const input = phpVersion.trim()
+    if (!input) {
+      setResult(null)
+      setError('Enter a PHP version, for example 8.2.34.')
+      return
+    }
+    setError('')
+    setResult(assessPhpVersion(input))
+  }
+
+  return (
+    <section className="tool-panel" aria-labelledby="version-tool-heading">
+      <div className="tool-panel__intro">
+        <p className="eyebrow">Offline version assessment</p>
+        <h2 id="version-tool-heading">Check a PHP version</h2>
+        <p>Compare a stable PHP version with the first fixed upstream release listed for its branch.</p>
+      </div>
+      <form className="tool-form" onSubmit={handleSubmit} noValidate>
+        <label htmlFor="php-version">PHP version</label>
+        <div className="form-controls">
+          <input
+            id="php-version"
+            name="php-version"
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="8.2.34"
+            value={phpVersion}
+            onChange={(event) => {
+              setPhpVersion(event.target.value)
+              if (error) setError('')
+            }}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'version-error version-help' : 'version-help'}
+          />
+          <button className="primary-button" type="submit">Check version</button>
+        </div>
+        {error && <p className="field-error" id="version-error" role="alert">{error}</p>}
+        <p className="field-help" id="version-help">
+          Use a stable <code>major.minor.patch</code> version, such as 8.2.34. An optional “PHP” prefix is accepted.
+        </p>
+      </form>
+
+      {result ? (
+        <AssessmentResult
+          assessment={result}
+          source="manual version"
+          description="Assessment based on the version string you entered."
+        />
+      ) : (
+        <div className="fixed-guidance">
+          <h3>First fixed upstream releases</h3>
+          <ul>
+            {PHP_SECURITY_ADVISORY.vulnerabilities[0].fixedReleases.map((release) => (
+              <li key={release.branch}><span>PHP {release.branch}</span><code>{release.version}</code></li>
+            ))}
+          </ul>
+          <p>Vendor packages may contain backported fixes. Confirm package-specific status with your vendor.</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function WebsiteChecker() {
   const [url, setUrl] = useState('')
   const [result, setResult] = useState<PublicScanResult | null>(null)
   const [error, setError] = useState('')
@@ -84,7 +259,6 @@ function PublicWebsiteCheck() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const submittedUrl = url.trim()
-
     if (!submittedUrl) {
       setResult(null)
       setError('Enter an HTTPS website URL to check.')
@@ -94,7 +268,6 @@ function PublicWebsiteCheck() {
     setIsLoading(true)
     setError('')
     setResult(null)
-
     try {
       const response = await fetch('/api/scan', {
         method: 'POST',
@@ -108,11 +281,10 @@ function PublicWebsiteCheck() {
         setError('The assessment service returned an invalid response.')
         return
       }
-
       if (!response.ok) {
         const message = typeof payload === 'object' && payload !== null
           && 'error' in payload && typeof payload.error === 'string'
-          ? payload.error
+          ? payload.error.slice(0, 256)
           : 'The website check could not be completed.'
         setError(message)
         return
@@ -121,7 +293,6 @@ function PublicWebsiteCheck() {
         setError('The assessment service returned an invalid response.')
         return
       }
-
       setResult(payload)
     } catch {
       setError('Unable to contact the assessment service. Please try again later.')
@@ -130,189 +301,180 @@ function PublicWebsiteCheck() {
     }
   }
 
+  const versionAssessment = result?.versionAssessment ?? null
+
   return (
-    <section className="public-check" aria-labelledby="public-check-heading">
-      <div className="public-check__heading">
-        <div>
-          <p className="eyebrow"><span className="eyebrow-line" /> ALLOWLISTED HOSTS ONLY</p>
-          <h2 id="public-check-heading">Public website check</h2>
-          <p className="public-check__intro">
-            Request public response headers from explicitly enabled developer-controlled websites.
-            This is a preliminary signal, not a server verification.
-          </p>
-        </div>
-        <span className="public-check__badge"><span className="offline-dot" /> HEAD request only</span>
+    <section className="tool-panel" aria-labelledby="website-tool-heading">
+      <div className="tool-panel__intro">
+        <p className="eyebrow">Allowlisted hosts only</p>
+        <h2 id="website-tool-heading">Check public response headers</h2>
+        <p>
+          This preliminary check makes one read-only HEAD request to a configured developer-controlled hostname.
+          Arbitrary public targets are not enabled.
+        </p>
       </div>
 
-      <form className="public-check__form" onSubmit={handleSubmit} noValidate>
+      <form className="tool-form" onSubmit={handleSubmit} noValidate>
         <label htmlFor="website-url">Website URL</label>
         <div className="form-controls">
-          <div className={`input-wrap${error ? ' input-wrap--error' : ''}`}>
-            <input
-              id="website-url"
-              name="website-url"
-              type="url"
-              inputMode="url"
-              autoComplete="url"
-              placeholder="https://your-domain.com"
-              value={url}
-              onChange={(event) => {
-                setUrl(event.target.value)
-                if (error) setError('')
-              }}
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? 'website-error website-help' : 'website-help'}
-            />
-          </div>
-          <button className="submit-button" type="submit" disabled={isLoading}>
-            {isLoading ? <><span className="loading-spinner" aria-hidden="true" /> Checking…</> : <>Check website <span aria-hidden="true">→</span></>}
+          <input
+            id="website-url"
+            name="website-url"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            placeholder="https://your-domain.com"
+            value={url}
+            onChange={(event) => {
+              setUrl(event.target.value)
+              if (error) setError('')
+            }}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? 'website-error website-help' : 'website-help'}
+          />
+          <button className="primary-button" type="submit" disabled={isLoading}>
+            {isLoading && <span className="loading-spinner" aria-hidden="true" />}
+            {isLoading ? 'Checking…' : 'Check website'}
           </button>
         </div>
-        {error && <p className="input-error" id="website-error" role="alert">{error}</p>}
+        {error && <p className="field-error" id="website-error" role="alert">{error}</p>}
         <p className="field-help" id="website-help">
-          HTTPS on port 443 only. Only exact hostnames configured by the site operator can be checked.
+          HTTPS on port 443 only. The server-side hostname allowlist remains authoritative.
         </p>
       </form>
 
+      {isLoading && <p className="loading-message" role="status">Checking the configured website headers…</p>}
       {result && (
-        <section className="public-result" aria-live="polite" aria-labelledby="public-result-heading">
-          <div className="public-result__top">
+        <div className="scan-result" aria-live="polite">
+          <div className="scan-result__summary">
             <div>
               <p className="eyebrow">Preliminary result · HTTP {result.httpStatus}</p>
-              <h3 id="public-result-heading">
-                {result.phpVersion ? <>PHP <code>{result.phpVersion}</code></> : 'No version evidence'}
-              </h3>
+              <h3>{result.phpVersion ? <>PHP <code>{result.phpVersion}</code></> : 'No version evidence'}</h3>
+              <p>{result.summary}</p>
             </div>
-            <span className={`public-result__status public-result__status--${result.status.toLowerCase()}`}>
+            <span className={`status-pill status-pill--${result.status.toLowerCase()}`}>
               {result.status === 'ASSESSED' ? 'Version evidence found' : 'Inconclusive'}
             </span>
           </div>
-          <p className="public-result__summary">{result.summary}</p>
-          {result.versionAssessment && (
-            <div className="cve-list">
-              {result.versionAssessment.vulnerabilities.map((vulnerability) => (
-                <article className="cve-card" key={vulnerability.cveId}>
-                  <div className="cve-card__topline">
-                    <span className="cve-id">{vulnerability.cveId}</span>
-                    <span className={`cve-status cve-status--${vulnerability.status.toLowerCase()}`}>
-                      {statusLabels[vulnerability.status]}
-                    </span>
-                  </div>
-                  <h3>{vulnerability.title}</h3>
-                  <p>{vulnerability.evidence}</p>
-                  <p className="recommendation"><strong>Recommended next step:</strong> {vulnerability.recommendation}</p>
-                </article>
-              ))}
-            </div>
+          {versionAssessment && (
+            <AssessmentResult
+              assessment={versionAssessment}
+              source="public response header"
+              description="A response header disclosed this version; headers can be spoofed."
+            />
           )}
-          <div className="public-result__evidence">
-            <strong>Evidence &amp; confidence</strong>
-            <p>{result.evidence}</p>
-            <p>
-              The check makes one non-invasive HEAD request to the site root and does not follow redirects.
-              Headers can be spoofed. Vendor security patches may be backported without changing the reported version.
-              No vulnerability has been confirmed.
-            </p>
-          </div>
-          {result.status === 'INCONCLUSIVE' && (
-            <p className="public-result__future">
-              A future verified server diagnostic would be needed to establish the runtime and package patch status.
-            </p>
-          )}
-          <a className="source-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
-            Official PHP advisory <span aria-hidden="true">↗</span>
+          {!versionAssessment && <p className="result-notice">{result.evidence}</p>}
+          <p className="limitation-note">
+            Headers do not prove the actual runtime or package patch status. Vendor patches may be backported.
+            This is not exploit testing and does not confirm a vulnerability.
+          </p>
+          <a className="text-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
+            Read the official PHP advisory <span aria-hidden="true">↗</span>
           </a>
-        </section>
+        </div>
       )}
-
-      <div className="public-check__warning">
-        <span className="scope-note__icon" aria-hidden="true">i</span>
-        <p><strong>Preliminary only:</strong> this check sends no exploit payloads and does not verify vulnerability or safety. Arbitrary public URLs are deliberately disabled.</p>
-      </div>
     </section>
   )
-}
-
-function downloadDiagnosticScript() {
-  const file = new Blob([phpDiagnosticSource], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(file)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'php-diagnostic.php'
-  document.body.append(link)
-  link.click()
-  link.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 function ServerDiagnostic() {
   const [analysis, setAnalysis] = useState<DiagnosticAnalysis | null>(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [copyStatus, setCopyStatus] = useState('')
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget
-    const file = input.files?.[0]
+  function downloadScript() {
+    const file = new Blob([phpDiagnosticSource], { type: 'text/plain;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = 'php-diagnostic.php'
+    document.body.append(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
+  }
+
+  async function copyCommand() {
+    try {
+      await navigator.clipboard.writeText('php php-diagnostic.php > php-report.json')
+      setCopyStatus('Command copied.')
+    } catch {
+      setCopyStatus('Copy was unavailable. Select and copy the command above.')
+    }
+  }
+
+  async function readReport(file: File | undefined, input?: HTMLInputElement) {
     if (!file) return
-
     setAnalysis(null)
     setError('')
+    setCopyStatus('')
     if (file.size > MAX_DIAGNOSTIC_REPORT_BYTES) {
       setError(`Choose a JSON report no larger than ${MAX_DIAGNOSTIC_REPORT_BYTES / 1024} KB.`)
-      input.value = ''
+      if (input) input.value = ''
       return
     }
 
     setIsLoading(true)
     try {
-      const contents = await file.text()
-      setAnalysis(analyzeDiagnosticReport(contents))
+      setAnalysis(analyzeDiagnosticReport(await file.text()))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The diagnostic report could not be read.')
-      input.value = ''
+      if (input) input.value = ''
     } finally {
       setIsLoading(false)
     }
   }
 
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    void readReport(event.currentTarget.files?.[0], event.currentTarget)
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragging(false)
+    void readReport(event.dataTransfer.files[0])
+  }
+
   return (
-    <section className="diagnostic-panel" aria-labelledby="diagnostic-heading">
-      <div className="diagnostic-panel__heading">
-        <div>
-          <p className="eyebrow"><span className="eyebrow-line" /> LOCAL · READ-ONLY</p>
-          <h2 id="diagnostic-heading">Server Diagnostic</h2>
-          <p className="diagnostic-panel__intro">
-            Inspect the PHP CLI runtime on infrastructure you control, then import its small JSON report
-            for an offline version assessment.
-          </p>
-        </div>
-        <span className="diagnostic-panel__badge"><span className="offline-dot" /> No report upload</span>
+    <section className="tool-panel" aria-labelledby="diagnostic-tool-heading">
+      <div className="tool-panel__intro">
+        <p className="eyebrow">Local · read-only · no upload</p>
+        <h2 id="diagnostic-tool-heading">Inspect the PHP CLI runtime</h2>
+        <p>Run a small script on infrastructure you control, then assess its JSON report in this browser.</p>
       </div>
 
-      <div className="diagnostic-steps">
-        <div className="diagnostic-step">
-          <span className="diagnostic-step__number">1</span>
+      <ol className="diagnostic-steps">
+        <li>
           <div>
-            <h3>Download the script</h3>
-            <p>Review the PHP source before running it on your own server.</p>
-            <button className="secondary-button" type="button" onClick={downloadDiagnosticScript}>
-              Download diagnostic script
-            </button>
+            <h3>Download and review the script</h3>
+            <p>It reports only the PHP version, SAPI, OS family, and UTC timestamp.</p>
+            <button className="secondary-button" type="button" onClick={downloadScript}>Download PHP diagnostic</button>
           </div>
-        </div>
-        <div className="diagnostic-step">
-          <span className="diagnostic-step__number">2</span>
+        </li>
+        <li>
           <div>
-            <h3>Run it in your terminal</h3>
-            <p>From the directory containing the downloaded script, run:</p>
+            <h3>Run it with PHP CLI</h3>
+            <p>Place the script in your chosen working directory and run:</p>
             <code className="diagnostic-command">php php-diagnostic.php &gt; php-report.json</code>
-            <p>Inspect the JSON locally before choosing whether to share it.</p>
+            <button className="copy-button" type="button" onClick={() => void copyCommand()}>Copy command</button>
+            {copyStatus && <span className="copy-status" role="status">{copyStatus}</span>}
           </div>
-        </div>
-      </div>
+        </li>
+      </ol>
 
-      <div className="diagnostic-import">
-        <label htmlFor="diagnostic-file">Import diagnostic JSON</label>
+      <div
+        className={`file-drop${isDragging ? ' file-drop--active' : ''}`}
+        onDragOver={(event) => {
+          event.preventDefault()
+          setIsDragging(true)
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+      >
+        <label htmlFor="diagnostic-file">Import the JSON report</label>
+        <p>Drop a file here or choose it from your device. Maximum size: {MAX_DIAGNOSTIC_REPORT_BYTES / 1024} KB.</p>
         <input
           id="diagnostic-file"
           name="diagnostic-file"
@@ -323,274 +485,165 @@ function ServerDiagnostic() {
           aria-describedby={error ? 'diagnostic-error diagnostic-help' : 'diagnostic-help'}
           disabled={isLoading}
         />
-        {error && <p className="input-error" id="diagnostic-error" role="alert">{error}</p>}
-        {isLoading && (
-          <p className="diagnostic-loading" role="status">
-            <span className="loading-spinner" aria-hidden="true" /> Validating report locally…
-          </p>
-        )}
+        {error && <p className="field-error" id="diagnostic-error" role="alert">{error}</p>}
+        {isLoading && <p className="loading-message" role="status">Validating report locally…</p>}
         <p className="field-help" id="diagnostic-help">
-          Maximum file size: {MAX_DIAGNOSTIC_REPORT_BYTES / 1024} KB. Only the expected report fields are accepted.
-          The file is read in this browser and is not sent to the backend.
+          The browser reads the selected file locally. Its contents are not sent to the backend or saved by the app.
         </p>
       </div>
 
       {analysis && (
         <section className="diagnostic-result" aria-live="polite" aria-labelledby="diagnostic-result-heading">
-          <div className="diagnostic-result__heading">
-            <div>
-              <p className="eyebrow">Local diagnostic evidence</p>
-              <h3 id="diagnostic-result-heading">PHP <code>{analysis.report.phpVersion}</code> · CLI</h3>
-            </div>
-            <span className={`overall-status overall-status--${analysis.assessment.status.toLowerCase()}`}>
-              <StatusMark status={analysis.assessment.status} />
-              {statusLabels[analysis.assessment.status]}
-            </span>
+          <div className="diagnostic-runtime">
+            <p className="eyebrow">Local diagnostic evidence · unauthenticated report</p>
+            <h3 id="diagnostic-result-heading">PHP <code>{analysis.report.phpVersion}</code> · CLI</h3>
+            <dl>
+              <div><dt>Runtime</dt><dd>CLI ({analysis.report.sapi})</dd></div>
+              <div><dt>Operating system</dt><dd>{analysis.report.osFamily}</dd></div>
+              <div>
+                <dt>Diagnostic time (UTC)</dt>
+                <dd><time dateTime={analysis.report.diagnosticTimestamp}>{analysis.report.diagnosticTimestamp}</time></dd>
+              </div>
+            </dl>
           </div>
-
-          <dl className="diagnostic-runtime">
-            <div><dt>Runtime context</dt><dd>CLI ({analysis.report.sapi})</dd></div>
-            <div><dt>Operating system family</dt><dd>{analysis.report.osFamily}</dd></div>
-            <div>
-              <dt>Diagnostic timestamp (UTC)</dt>
-              <dd><time dateTime={analysis.report.diagnosticTimestamp}>{analysis.report.diagnosticTimestamp}</time></dd>
-            </div>
-          </dl>
-
-          <div className="cve-list">
-            {analysis.assessment.vulnerabilities.map((vulnerability) => (
-              <article className="cve-card" key={vulnerability.cveId}>
-                <div className="cve-card__topline">
-                  <span className="cve-id">{vulnerability.cveId}</span>
-                  <span className={`cve-status cve-status--${vulnerability.status.toLowerCase()}`}>
-                    {statusLabels[vulnerability.status]}
-                  </span>
-                </div>
-                <h3>{vulnerability.title}</h3>
-                <p>{vulnerability.evidence}</p>
-                <p className="recommendation"><strong>Recommended next step:</strong> {vulnerability.recommendation}</p>
-                <a className="source-link diagnostic-source-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
-                  Official PHP advisory <span aria-hidden="true">↗</span>
-                </a>
-              </article>
-            ))}
-          </div>
-
-          <div className="evidence-note">
-            <span className="evidence-note__icon" aria-hidden="true">i</span>
-            <p>
-              <strong>Evidence &amp; confidence</strong> This report is user-provided and is not authenticated.
-              {` ${analysis.assessment.confidenceExplanation} `}
-              It describes CLI PHP only, which may differ from PHP serving web traffic. Vendor backports are not
-              verified, and this assessment does not prove a vulnerability or establish that a system is secure.
-            </p>
-          </div>
+          <AssessmentResult
+            assessment={analysis.assessment}
+            source="local CLI diagnostic"
+            description="Assessment of the PHP version in this user-provided report."
+          />
+          <p className="limitation-note limitation-note--prominent">
+            <strong>CLI is not necessarily web PHP.</strong> The CLI runtime may differ from the PHP version serving
+            web traffic. Reports are user-provided and unauthenticated; backports are not verified. This result
+            does not prove a vulnerability or establish that a system is secure.
+          </p>
         </section>
       )}
 
-      <div className="public-check__warning">
-        <span className="scope-note__icon" aria-hidden="true">i</span>
-        <p>
-          <strong>Read-only and local:</strong> the script makes no network requests and changes no files.
-          Do not run it through a web server. It collects only the PHP version, CLI SAPI, OS family, and UTC timestamp.
-        </p>
-      </div>
+      <p className="tool-disclaimer">
+        The script is not a web endpoint. It makes no network requests, executes no shell commands, and modifies no files.
+      </p>
     </section>
   )
 }
 
-function ResultPanel({ result }: { result: VersionAssessment }) {
-  const isUnknown = result.status === 'UNKNOWN'
-
+function AppHeader() {
   return (
-    <section className="results-panel" aria-labelledby="results-heading" aria-live="polite">
-      <div className="results-heading">
-        <div>
-          <p className="eyebrow">Assessment result</p>
-          <h2 id="results-heading">
-            {result.version ? <>PHP <code>{result.version}</code></> : 'Version could not be assessed'}
-          </h2>
-          <a className="source-link results-source-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
-            Official PHP advisory <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-        <span className={`overall-status overall-status--${result.status.toLowerCase()}`}>
-          <StatusMark status={result.status} />
-          {statusLabels[result.status]}
-        </span>
-      </div>
+    <header className="site-header">
+      <a className="brand" href="#top" aria-label="PHP2Shell Guard home">
+        <span className="brand-mark" aria-hidden="true">P</span>
+        <span>PHP2Shell <strong>Guard</strong></span>
+      </a>
+      <a className="header-link" href="https://github.com/Anwar0904/php2shell-guard" target="_blank" rel="noreferrer">
+        GitHub <span aria-hidden="true">↗</span>
+      </a>
+    </header>
+  )
+}
 
-      {isUnknown && <p className="result-notice">{result.summary}</p>}
-
-      <div className="cve-list">
-        {result.vulnerabilities.map((vulnerability) => (
-          <article className="cve-card" key={vulnerability.cveId}>
-            <div className="cve-card__topline">
-              <span className="cve-id">{vulnerability.cveId}</span>
-              <span className={`cve-status cve-status--${vulnerability.status.toLowerCase()}`}>
-                {statusLabels[vulnerability.status]}
-              </span>
-            </div>
-            <h3>{vulnerability.title}</h3>
-            <p>{vulnerability.evidence}</p>
-            <p className="recommendation"><strong>Recommended next step:</strong> {vulnerability.recommendation}</p>
-          </article>
-        ))}
+function AppFooter() {
+  return (
+    <footer className="site-footer">
+      <div>
+        <strong>PHP2Shell Guard</strong>
+        <p>PHP security advisory evidence, with clear limits and next steps.</p>
       </div>
-
-      <div className="fixed-guidance">
-        <div className="fixed-guidance__icon" aria-hidden="true">↗</div>
-        <div>
-          <h3>First fixed upstream releases</h3>
-          <p>
-            {PHP_SECURITY_ADVISORY.vulnerabilities[0].fixedReleases
-              .map((release) => `${release.branch}: ${release.version}`)
-              .join(' · ')}.
-            {' '}Vendor packages may include backports; confirm with your distribution or hosting provider.
-          </p>
-        </div>
+      <div className="site-footer__links">
+        <a href="https://github.com/Anwar0904/php2shell-guard" target="_blank" rel="noreferrer">GitHub</a>
+        <a href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">Official PHP advisory</a>
       </div>
-
-      <div className="evidence-note">
-        <span className="evidence-note__icon" aria-hidden="true">i</span>
-        <p><strong>Evidence boundary</strong>{' '}{result.confidenceExplanation} A version match is not a test of the running site and cannot establish whether vendor backports are present.</p>
-      </div>
-    </section>
+      <p className="site-footer__note">
+        Version and header evidence do not verify a web runtime, vendor backport, or system security.
+      </p>
+    </footer>
   )
 }
 
 function App() {
-  const [phpVersion, setPhpVersion] = useState('')
-  const [result, setResult] = useState<VersionAssessment | null>(null)
-  const [inputError, setInputError] = useState('')
+  const [activeTab, setActiveTab] = useState<ToolTab>('version')
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const currentIndex = tabs.findIndex(({ id }) => id === activeTab)
+    let nextIndex: number | undefined
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length
+    if (event.key === 'ArrowLeft') nextIndex = (currentIndex + tabs.length - 1) % tabs.length
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = tabs.length - 1
+    if (nextIndex === undefined) return
+
     event.preventDefault()
-    const trimmedVersion = phpVersion.trim()
-
-    if (!trimmedVersion) {
-      setResult(null)
-      setInputError('Enter a PHP version to assess, for example 8.2.34.')
-      return
+    const nextTab = tabs[nextIndex]
+    if (nextTab) {
+      setActiveTab(nextTab.id)
+      document.getElementById(`tool-tab-${nextTab.id}`)?.focus()
     }
-
-    setInputError('')
-    setResult(assessPhpVersion(trimmedVersion))
   }
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="PHP2Shell Guard home">
-          <span className="brand-mark" aria-hidden="true"><span /></span>
-          <span>PHP2Shell <strong>Guard</strong></span>
-        </a>
-        <span className="offline-label"><span className="offline-dot" /> Version checks · website check</span>
-      </header>
-
-      <main id="top">
-        <section className="hero">
-          <p className="eyebrow"><span className="eyebrow-line" /> PHP SECURITY ADVISORY</p>
-          <h1>Know where your PHP version stands.</h1>
-          <p className="hero-copy">
-            Compare a PHP version against official fixed releases, or request limited public-header
-            evidence from explicitly allowlisted websites.
+    <div className="app-shell" id="top">
+      <AppHeader />
+      <main>
+        <section className="hero" aria-labelledby="page-heading">
+          <p className="eyebrow">PHP SECURITY ADVISORY CHECKS</p>
+          <h1 id="page-heading">Know where your PHP stands.</h1>
+          <p>
+            Check PHP version evidence against official security advisories. Simple results, clear next steps.
           </p>
-
-          <div className="assessment-card">
-            <form className="version-form" onSubmit={handleSubmit} noValidate>
-              <label htmlFor="php-version">PHP version</label>
-              <div className="form-controls">
-                <div className={`input-wrap${inputError ? ' input-wrap--error' : ''}`}>
-                  <span className="input-prefix" aria-hidden="true">PHP</span>
-                  <input
-                    id="php-version"
-                    name="php-version"
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    spellCheck={false}
-                    placeholder="8.2.34"
-                    value={phpVersion}
-                    onChange={(event) => {
-                      setPhpVersion(event.target.value)
-                      if (inputError) setInputError('')
-                    }}
-                    aria-invalid={Boolean(inputError)}
-                    aria-describedby={inputError ? 'version-error version-help' : 'version-help'}
-                  />
-                </div>
-                <button className="submit-button" type="submit">
-                  Check PHP version
-                  <span aria-hidden="true">→</span>
-                </button>
-              </div>
-              {inputError
-                ? <p className="input-error" id="version-error" role="alert">{inputError}</p>
-                : null}
-              <p className="field-help" id="version-help">Enter a stable version such as 8.2.34. A leading “PHP” is optional.</p>
-            </form>
+          <div className="hero__note">
+            <span aria-hidden="true">i</span>
+            <p>These checks provide evidence, not proof that a website is secure or vulnerable.</p>
           </div>
         </section>
 
-        {result ? (
-          <ResultPanel result={result} />
-        ) : (
-          <section className="advisory-overview" aria-labelledby="advisory-heading">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">What this check covers</p>
-                <h2 id="advisory-heading">Two CVEs. One upstream version check.</h2>
-              </div>
-              <a className="source-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
-                Official PHP advisory <span aria-hidden="true">↗</span>
-              </a>
-            </div>
-            <div className="advisory-grid">
-              {PHP_SECURITY_ADVISORY.vulnerabilities.map((vulnerability) => (
-                <article className="advisory-card" key={vulnerability.cveId}>
-                  <div className="advisory-card__id">{vulnerability.cveId}</div>
-                  <h3>{vulnerability.title}</h3>
-                  <p>{vulnerability.shortDescription}</p>
-                </article>
-              ))}
-            </div>
-            <div className="fixed-guidance">
-              <div className="fixed-guidance__icon" aria-hidden="true">↗</div>
-              <div>
-                <h3>Upstream fixed releases</h3>
-                <p>
-                  PHP {PHP_SECURITY_ADVISORY.vulnerabilities[0].fixedReleases.map((release) => release.version).join(' · ')}.
-                  {' '}For older or vendor-packaged builds, confirm fixes with your distribution or hosting provider.
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
+        <section className="tools" aria-label="PHP assessment tools">
+          <div className="tool-tabs" role="tablist" aria-label="Choose an assessment tool" onKeyDown={handleTabKeyDown}>
+            {tabs.map(({ id, label }) => (
+              <button
+                key={id}
+                id={`tool-tab-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === id}
+                aria-controls={`tool-panel-${id}`}
+                tabIndex={activeTab === id ? 0 : -1}
+                onClick={() => setActiveTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div id="tool-panel-version" role="tabpanel" aria-labelledby="tool-tab-version" hidden={activeTab !== 'version'} tabIndex={0}>
+            <VersionChecker />
+          </div>
+          <div id="tool-panel-website" role="tabpanel" aria-labelledby="tool-tab-website" hidden={activeTab !== 'website'} tabIndex={0}>
+            <WebsiteChecker />
+          </div>
+          <div id="tool-panel-diagnostic" role="tabpanel" aria-labelledby="tool-tab-diagnostic" hidden={activeTab !== 'diagnostic'} tabIndex={0}>
+            <ServerDiagnostic />
+          </div>
+        </section>
 
-        <PublicWebsiteCheck />
-
-        <ServerDiagnostic />
-
-        <section className="scope-note" aria-label="Assessment limitations">
-          <div className="scope-note__icon" aria-hidden="true">i</div>
+        <section className="advisory-reference" aria-labelledby="advisory-heading">
           <div>
-            <h2>Version assessment is not vulnerability testing</h2>
+            <p className="eyebrow">Current coverage</p>
+            <h2 id="advisory-heading">Two CVEs, using official upstream release data.</h2>
+          </div>
+          <div className="advisory-reference__cves">
+            {PHP_SECURITY_ADVISORY.vulnerabilities.map(({ cveId, title }) => (
+              <div key={cveId}><span>{cveId}</span><p>{title}</p></div>
+            ))}
+          </div>
+          <div className="advisory-reference__footer">
             <p>
-              Version assessments are based on supplied evidence. The website check makes one HEAD request only
-              to exact allowlisted hosts, while the server diagnostic inspects only CLI PHP. None verifies the
-              web-serving runtime or vendor backports, and none proves an installation is secure.
+              Fixed upstream releases: {PHP_SECURITY_ADVISORY.vulnerabilities[0].fixedReleases
+                .map(({ branch, version }) => `${branch}: ${version}`).join(' · ')}.
             </p>
+            <a className="text-link" href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
+              Official PHP advisory <span aria-hidden="true">↗</span>
+            </a>
           </div>
         </section>
       </main>
-
-      <footer className="footer">
-        <span>PHP2Shell Guard <span aria-hidden="true">·</span> Local CLI diagnostics</span>
-        <a href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">
-          Source verified {PHP_SECURITY_ADVISORY.lastVerified}
-        </a>
-      </footer>
+      <AppFooter />
     </div>
   )
 }
