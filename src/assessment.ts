@@ -1,4 +1,4 @@
-import { PHP_SECURITY_ADVISORY } from './data/advisories'
+import { PHP_SECURITY_ADVISORY } from './data/advisories.js'
 
 export type AssessmentStatus =
   | 'POTENTIALLY_AFFECTED'

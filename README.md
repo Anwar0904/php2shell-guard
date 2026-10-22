@@ -1,15 +1,36 @@
 # PHP2Shell Guard
 
-PHP2Shell Guard is an open-source security assessment tool. Milestone 1 provides an offline comparison of a user-entered PHP version with official upstream releases fixing two PHP security advisories.
+[![CI](https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Anwar0904/php2shell-guard/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-Worker%20runtime-F38020?logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/workers/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-## Supported checks
+A focused, low-noise PHP security assessment tool for upstream version evidence and safe, developer-controlled website header checks.
 
-The version assessment covers:
+## Why this project exists
 
-- CVE-2026-109618
-- CVE-2026-109619
+PHP2Shell Guard was created to help operators and developers assess whether a PHP version is aligned with official upstream fixed releases for two critical PHP advisories without claiming a site is safe or vulnerable based on a single header. The project is intentionally conservative: it favors evidence-driven analysis, clear limits, and developer-controlled checks over broad public scanning.
 
-The official PHP advisory lists these upstream fixed releases:
+## What is currently implemented
+
+- Offline comparison of a user-entered PHP version against official upstream fixed releases for:
+  - CVE-2026-109618
+  - CVE-2026-109619
+- Allowlisted public-header check for exact, developer-controlled HTTPS hostnames.
+- Strict input validation and fail-closed behavior for malformed, internal, IP-based, credential-bearing, and non-allowlisted targets.
+- Unit tests covering version assessment logic and mocked Worker scan behavior.
+
+## Supported CVEs and official references
+
+The project currently covers the advisories announced by the PHP project on 2026-10-21:
+
+- CVE-2026-109618 — [PHP Security Advisory](https://www.php.net/archive/2026.php#2026-10-21-5)
+- CVE-2026-109619 — [PHP Security Advisory](https://www.php.net/archive/2026.php#2026-10-21-5)
+
+Official upstream fixed releases recorded in the project:
 
 | PHP branch | First fixed upstream release |
 | --- | --- |
@@ -18,50 +39,166 @@ The official PHP advisory lists these upstream fixed releases:
 | 8.4 | 8.4.27 |
 | 8.5 | 8.5.12 |
 
-PHP 8.1 and older are reported as legacy/unverified because vendor and source backports may exist and need separate confirmation. Unknown branches, prerelease versions, and malformed or unverifiable strings do not receive a positive security verdict.
+## How version assessment works
 
-**A version comparison is not vulnerability testing.** It does not contact or inspect a website, establish the PHP runtime in use, confirm vendor backports, or prove an installation secure. A version listed as upstream-fixed is evidence about the version string only.
+The project validates a PHP version string as a stable `major.minor.patch` value, compares it against the first upstream fixed release for that branch, and returns one of the following statuses:
 
-## Official advisory
+- `POTENTIALLY_AFFECTED`
+- `UPSTREAM_PATCHED_VERSION`
+- `LEGACY_UNVERIFIED`
+- `UNKNOWN`
 
-[PHP security advisory — 21 October 2026](https://www.php.net/archive/2026.php#2026-10-21-5)
+This is strictly version-evidence logic. It does not validate that an application is actually running that version or that a package includes a vendor backport. Unsupported branches, malformed values, prereleases, and unknown branches are treated conservatively as `UNKNOWN` or `LEGACY_UNVERIFIED` rather than receiving a positive verdict.
 
-The advisory data in this project records this source and was last verified on **2026-10-21**.
+## Assessment confidence and limits
 
-## Installation and local development
+Confidence is intentionally limited to the data being evaluated:
 
-Requirements: Node.js and npm compatible with the versions in the project toolchain.
+- A version match reflects upstream release data, not live runtime verification.
+- A public `X-Powered-By` or `Server` header is not proof of the actual PHP version or patch status.
+- Vendor backports can fix a package while leaving the upstream PHP version unchanged.
+- The tool never confirms exploitation or a successful vulnerability in a live site.
+
+## Screenshot
+
+![Current application UI](./src/assets/hero.png)
+
+## Quick start
 
 ```sh
 npm install
 npm run dev
 ```
 
-Vite prints a local development URL when the server is ready. The application performs no assessment network requests.
+Then open the local Vite URL in a browser.
 
-## Testing and validation
+## Local development
+
+```sh
+npm install
+npm run dev
+```
+
+For the allowlisted website checker, add a local `.dev.vars` file with exact hostnames you control:
+
+```dotenv
+SCAN_ALLOWED_HOSTS=staging.yourdomain.com
+```
+
+Do not add arbitrary public URLs or wildcard entries. The check fails closed when the allowlist is absent or invalid.
+
+## Available npm commands
 
 ```sh
 npm test
 npm run build
 npm run lint
+npm run dev
+npm run preview
+npm run deploy
+npm run cf-typegen
 ```
 
-The production build includes the configured TypeScript project checks before running Vite.
+## Technology stack
+
+- React 19
+- TypeScript
+- Vite 8
+- Tailwind CSS 4
+- Cloudflare Workers
+- Vitest
+
+## Project structure
+
+```text
+.
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   ├── pull_request_template.md
+│   └── workflows/
+├── src/
+│   ├── App.css
+│   ├── App.tsx
+│   ├── assessment.test.ts
+│   ├── assessment.ts
+│   ├── data/
+│   ├── index.css
+│   ├── main.tsx
+│   └── assets/
+├── worker/
+│   ├── index.ts
+│   ├── scan.ts
+│   └── scan.test.ts
+├── LICENSE
+├── README.md
+├── SECURITY.md
+├── CONTRIBUTING.md
+├── CODE_OF_CONDUCT.md
+├── eslint.config.js
+├── index.html
+├── package.json
+├── package-lock.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+├── tsconfig.worker.json
+├── vite.config.ts
+├── vitest.config.ts
+├── wrangler.jsonc
+└── worker-configuration.d.ts
+```
+
+## Supported and planned features
+
+| Status | Feature |
+| --- | --- |
+| Implemented | Offline PHP version assessment for the two supported CVEs |
+| Implemented | Public website check against exact allowlisted HTTPS hostnames |
+| Implemented | Strict input validation and fail-closed scanning logic |
+| Planned | Verified server-side runtime diagnostics |
+| Planned | Public hosted deployment |
+| Planned | Broader public URL scanning and automated verification workflows |
 
 ## Current limitations
 
-- Assessment is based only on the version string manually provided by the user.
-- Only upstream fixed release comparisons for PHP branches 8.2 through 8.5 are included.
-- Vendor backports and distributions' package revisions are not inferred.
-- The app does not assess URLs, verify domains, or test servers.
-- It does not perform exploit-based confirmation or invoke third-party vulnerability scanners.
+- Public checks are deliberately restricted to exact, explicitly allowlisted hostnames.
+- The website checker operates on public headers only and does not verify the actual runtime or vendor packages.
+- Arbitrary public URL submissions remain disabled.
+- This project does not perform vulnerability confirmation or exploit testing.
+- It does not persist scan history or add user accounts.
 
-## Planned functionality
+## Security considerations
 
-The following are **not implemented** in Milestone 1:
+This project intentionally avoids unsafe scanning behavior:
 
-1. Public URL-based preliminary assessments.
-2. Verified server-side assessments.
+- No arbitrary public scanning.
+- No payload-based exploit testing.
+- No password, auth, or third-party API integration.
+- No HTML crawling or content downloads during the public-check flow.
+- No redirect following in the site check.
 
-No deployment, authentication, database, or external scanning integration is included in this milestone.
+The app is designed as an evidence-focused, low-risk assessment utility, not as a general reconnaissance tool.
+
+## Roadmap
+
+| Phase | Status | Notes |
+| --- | --- | --- |
+| Milestone 1 | Completed | Offline PHP advisory comparison and version evidence checks |
+| Milestone 2 | Implemented in code | Allowlisted public-header checks with fail-closed validation |
+| Verified server diagnostics | Planned | Requires a fully reviewed and scope-limited runtime verification design |
+| Hosted public deployment | Planned | Not yet implemented |
+
+## Contributing
+
+Contributions are welcome when they improve the project’s quality, clarity, and security posture. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or pull request.
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
+
+## Maintainer
+
+The repository is maintained by the GitHub owner: [@Anwar0904](https://github.com/Anwar0904).
+
+## Security reporting
+
+Please review [SECURITY.md](./SECURITY.md) before reporting a vulnerability.

@@ -538,6 +538,211 @@
   line-height: 1.65;
 }
 
+.public-check {
+  margin-top: 37px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 7px 24px rgb(21 37 53 / 3%);
+}
+
+.public-check__heading,
+.public-result__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.public-check__heading .eyebrow {
+  margin-bottom: 8px;
+}
+
+.public-check__heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 580;
+  letter-spacing: -0.035em;
+}
+
+.public-check__intro {
+  max-width: 630px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.public-check__badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid #e5ebe8;
+  border-radius: 5px;
+  color: #586c64;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.public-check__badge .offline-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.public-check__form {
+  margin-top: 20px;
+  padding-top: 17px;
+  border-top: 1px solid #edf0ef;
+}
+
+.public-check__form label {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.public-check__form .input-wrap {
+  padding-left: 3px;
+}
+
+.public-check__form .input-wrap input {
+  padding-left: 10px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.public-check__form .input-wrap input::placeholder {
+  color: #9ca8ad;
+}
+
+.submit-button:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.loading-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.public-result {
+  display: grid;
+  gap: 13px;
+  margin-top: 20px;
+  padding-top: 17px;
+  border-top: 1px solid #edf0ef;
+}
+
+.public-result__top {
+  align-items: center;
+}
+
+.public-result__top .eyebrow {
+  margin-bottom: 6px;
+}
+
+.public-result__top h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.public-result__top code {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #eef3f1;
+  color: #315e4e;
+  font-family: var(--mono);
+  font-size: 0.8em;
+  font-weight: 550;
+}
+
+.public-result__status {
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: #edf0f1;
+  color: #596970;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.public-result__status--assessed {
+  background: #e6f2eb;
+  color: #27734f;
+}
+
+.public-result__summary {
+  color: #43575e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.public-result__evidence {
+  padding: 13px 14px;
+  border-radius: 6px;
+  background: #f3f6f6;
+  color: #596970;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.public-result__evidence strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #35484f;
+  font-size: 11px;
+}
+
+.public-result__evidence p + p {
+  margin-top: 6px;
+}
+
+.public-result__future {
+  padding: 10px 12px;
+  border-left: 3px solid #9eacae;
+  background: #f6f7f7;
+  color: #5d6b71;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.public-check__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  padding-top: 13px;
+  border-top: 1px solid #edf0ef;
+}
+
+.public-check__warning p {
+  color: #68777d;
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.public-check__warning strong {
+  color: #46585e;
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
@@ -598,6 +803,29 @@
   .section-title h2,
   .results-heading h2 {
     font-size: 19px;
+  }
+
+  .public-check {
+    padding: 17px 15px;
+  }
+
+  .public-check__heading,
+  .public-result__top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 11px;
+  }
+
+  .public-check__heading h2 {
+    font-size: 19px;
+  }
+
+  .public-check__form .form-controls {
+    flex-direction: column;
+  }
+
+  .public-check__form .submit-button {
+    width: 100%;
   }
 
   .advisory-grid,
