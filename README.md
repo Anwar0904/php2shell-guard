@@ -1,75 +1,67 @@
-# React + TypeScript + Vite
+# PHP2Shell Guard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PHP2Shell Guard is an open-source security assessment tool. Milestone 1 provides an offline comparison of a user-entered PHP version with official upstream releases fixing two PHP security advisories.
 
-Currently, two official plugins are available:
+## Supported checks
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The version assessment covers:
 
-## React Compiler
+- CVE-2026-109618
+- CVE-2026-109619
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The official PHP advisory lists these upstream fixed releases:
 
-## Expanding the ESLint configuration
+| PHP branch | First fixed upstream release |
+| --- | --- |
+| 8.2 | 8.2.35 |
+| 8.3 | 8.3.36 |
+| 8.4 | 8.4.27 |
+| 8.5 | 8.5.12 |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+PHP 8.1 and older are reported as legacy/unverified because vendor and source backports may exist and need separate confirmation. Unknown branches, prerelease versions, and malformed or unverifiable strings do not receive a positive security verdict.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+**A version comparison is not vulnerability testing.** It does not contact or inspect a website, establish the PHP runtime in use, confirm vendor backports, or prove an installation secure. A version listed as upstream-fixed is evidence about the version string only.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Official advisory
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+[PHP security advisory — 21 October 2026](https://www.php.net/archive/2026.php#2026-10-21-5)
 
+The advisory data in this project records this source and was last verified on **2026-10-21**.
+
+## Installation and local development
+
+Requirements: Node.js and npm compatible with the versions in the project toolchain.
+
+```sh
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Vite prints a local development URL when the server is ready. The application performs no assessment network requests.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Testing and validation
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm test
+npm run build
+npm run lint
 ```
+
+The production build includes the configured TypeScript project checks before running Vite.
+
+## Current limitations
+
+- Assessment is based only on the version string manually provided by the user.
+- Only upstream fixed release comparisons for PHP branches 8.2 through 8.5 are included.
+- Vendor backports and distributions' package revisions are not inferred.
+- The app does not assess URLs, verify domains, or test servers.
+- It does not perform exploit-based confirmation or invoke third-party vulnerability scanners.
+
+## Planned functionality
+
+The following are **not implemented** in Milestone 1:
+
+1. Public URL-based preliminary assessments.
+2. Verified server-side assessments.
+
+No deployment, authentication, database, or external scanning integration is included in this milestone.
