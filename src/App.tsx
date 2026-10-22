@@ -530,7 +530,7 @@ function AppHeader() {
   return (
     <header className="site-header">
       <a className="brand" href="#top" aria-label="PHP2Shell Guard home">
-        <span className="brand-mark" aria-hidden="true">P</span>
+        <img className="brand-mark" src="/php2shell.png" alt="" aria-hidden="true" />
         <span>PHP2Shell <strong>Guard</strong></span>
       </a>
       <a className="header-link" href="https://github.com/Anwar0904/php2shell-guard" target="_blank" rel="noreferrer">
@@ -543,11 +543,11 @@ function AppHeader() {
 function AppFooter() {
   return (
     <footer className="site-footer">
-      <div>
+      <div className="site-footer__brand">
         <strong>PHP2Shell Guard</strong>
-        <p>PHP security advisory evidence, with clear limits and next steps.</p>
+        <p>Evidence-based PHP advisory guidance for local and hosted runtime checks.</p>
       </div>
-      <div className="site-footer__links">
+      <div className="site-footer__links" aria-label="Project links">
         <a href="https://github.com/Anwar0904/php2shell-guard" target="_blank" rel="noreferrer">GitHub</a>
         <a href={PHP_SECURITY_ADVISORY.source} target="_blank" rel="noreferrer">Official PHP advisory</a>
       </div>
