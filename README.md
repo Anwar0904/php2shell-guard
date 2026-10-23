@@ -155,34 +155,146 @@ Key paths: [`src/assessment.ts`](./src/assessment.ts) (assessment engine), [`src
 ## Privacy and security boundaries
 
 - **Version check:** assesses a provided version string without needing to inspect a server.
-- **Website check:** uses a Cloudflare Worker for network access, with a default-empty exact-host allowlist, HTTPS-only validation, a single `HEAD` request, and redirects disabled.
+- **Website check:** uses a Cloudflare Worker for network access, with an exact-host allowlist, HTTPS-only validation, a single `HEAD` request, and redirects disabled.
 - **Server diagnostic:** locally imported JSON is processed in the browser; there is no diagnostic-upload API or persistent scan history.
 - **No active exploitation:** the project does not send vulnerability payloads, perform remote exploit confirmation, or scan arbitrary third-party sites.
 - **No guarantee of safety:** PHP CLI, HTTP headers, and version strings do not independently prove which patches are installed in a live web-serving process.
 
 Only assess systems you own or are explicitly authorized to test. For responsible disclosure of a problem **in PHP2Shell Guard itself**, see [SECURITY.md](./SECURITY.md).
 
-## Deployment
+## Cloudflare Workers deployment
 
-The application runs as a React static frontend with a Cloudflare Worker API. The current public deployment is:
+Deployment is a manual maintainer action; the project does not deploy automatically. The current Worker and static SPA configuration is in [wrangler.jsonc](./wrangler.jsonc), and the GitHub Actions workflow does not deploy.
 
-**[php2shell-guard.anwar-labs.workers.dev](https://php2shell-guard.anwar-labs.workers.dev/)**
+1. Review the source and required security settings for your environment.
+2. Install dependencies and run validation:
 
-For a maintainer-controlled deployment:
+   ```sh
+   npm ci
+   npm test
+   npm run build
+   npm run seo:check
+   npm run lint
+   ```
 
-```bash
-npm ci
-npm test
-npm run build
-npm run seo:check
-npm run lint
-npx wrangler login
-npm run deploy -- --keep-vars
+3. Authenticate Wrangler with an authorized Cloudflare account using the official Wrangler login procedure.
+4. Review the deployment preview and then explicitly run `npm run deploy -- --keep-vars` from a maintainer-controlled environment. This preserves environment variables configured through the Cloudflare dashboard.
+5. The default `wrangler.jsonc` configuration enables the website check only for `php2shell-guard.anwar-labs.workers.dev` and `www.arazidigitalmedia.com`. To change this, set `SCAN_ALLOWED_HOSTS` to a comma-separated list of exact hostnames you control. Never use wildcard hostnames or allow targets you do not control.
+6. Verify the deployed static response headers, SPA navigation, and `/api/scan` behavior. Confirm that only exact configured hostnames are accepted and that removing `SCAN_ALLOWED_HOSTS` makes the endpoint fail closed without an outbound request.
+
+The `public/_headers` file defines security headers for static assets. Worker-generated API responses set their own restrictive CSP, no-store caching, referrer, content-type, and frame headers. Static asset headers do not substitute for Worker response headers. Client source maps are not generated, and Wrangler source-map upload is disabled. Do not put credentials in public variables. No deployment or Cloudflare account configuration is performed by this repository’s CI.
+
+### Production verification checklist
+
+- Confirm `SCAN_ALLOWED_HOSTS` is absent or contains only exact, approved developer-owned hostnames.
+- Confirm requests for non-allowlisted hosts fail before any outbound request.
+- Confirm `/api/scan` permits only its documented POST contract and does not follow redirects.
+- Check static responses for CSP, `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, and `Permissions-Policy`.
+- Check API responses separately for their Worker-set security headers and `Cache-Control: no-store`.
+- Confirm the browser can assess imported diagnostic JSON without sending report contents.
+- Keep the public URL pointed at the reviewed deployment; do not substitute a preview or local development endpoint.
+
+## Technology stack
+
+- React 19
+- TypeScript
+- Vite 8
+- Tailwind CSS 4
+- Cloudflare Workers
+- Vitest
+
+## Project structure
+
+```text
+.
+├── .github/
+│   ├── ISSUE_TEMPLATE/
+│   ├── pull_request_template.md
+│   └── workflows/
+├── src/
+│   ├── App.css
+│   ├── App.tsx
+│   ├── assessment-labels.test.ts
+│   ├── assessment-labels.ts
+│   ├── assessment.test.ts
+│   ├── assessment.ts
+│   ├── diagnostic.test.ts
+│   ├── diagnostic.ts
+│   ├── data/
+│   ├── index.css
+│   ├── main.tsx
+│   └── assets/
+├── worker/
+│   ├── index.test.ts
+│   ├── index.ts
+│   ├── scan.ts
+│   └── scan.test.ts
+├── tools/
+│   └── php-diagnostic.php
+├── public/
+│   ├── _headers
+│   ├── favicon.png
+│   ├── php2shell.png
+│   ├── robots.txt
+│   └── sitemap.xml
+├── scripts/
+│   └── validate-seo.mjs
+├── LICENSE
+├── README.md
+├── SECURITY.md
+├── CONTRIBUTING.md
+├── CODE_OF_CONDUCT.md
+├── eslint.config.js
+├── index.html
+├── package.json
+├── package-lock.json
+├── tsconfig.app.json
+├── tsconfig.node.json
+├── tsconfig.worker.json
+├── vite.config.ts
+├── vitest.config.ts
+├── wrangler.jsonc
+└── worker-configuration.d.ts
 ```
 
-Keep `SCAN_ALLOWED_HOSTS` unset in production unless you have specific developer-controlled targets to approve. Deployment does not require MongoDB, user accounts, or a paid API. Hosting remains subject to Cloudflare's plan limits.
+## Supported and planned features
 
-The repository's [CI workflow](./.github/workflows/ci.yml) runs automated checks on pushes and pull requests; it does **not** deploy automatically.
+| Status | Feature |
+| --- | --- |
+| Implemented | Offline PHP version assessment for the two supported CVEs |
+| Implemented | Public website check against exact allowlisted HTTPS hostnames |
+| Implemented | Strict input validation and fail-closed scanning logic |
+| Implemented | Local PHP CLI diagnostic and client-side JSON import with strict schema validation |
+| Implemented | Responsive, keyboard-accessible three-tab interface and static/API security headers |
+| Implemented | Canonical/social metadata, schema.org descriptions, crawlable synopsis, robots.txt, and sitemap.xml |
+| Implemented | Manual Wrangler deployment path with source-map upload disabled |
+| Planned | Verified web-serving runtime and package diagnostics |
+| Live | Public hosted application at the maintainer-configured Cloudflare Workers URL |
+| Planned | Broader public URL scanning and automated verification workflows |
+
+## Current limitations
+
+- Public checks are deliberately restricted to exact, explicitly allowlisted hostnames.
+- The website checker operates on public headers only and does not verify the actual runtime or vendor packages.
+- The local server diagnostic reports CLI PHP only; web-serving PHP may use a different runtime or configuration.
+- Diagnostic JSON is user-provided and is not authenticated. Reports are only inspected in the local browser and are not uploaded.
+- Vendor package backports are not automatically verified.
+- Arbitrary public URL submissions remain disabled.
+- This project does not perform vulnerability confirmation or exploit testing.
+- It does not persist scan history or add user accounts.
+- Website checks remain safe only for explicitly configured developer-controlled destinations; URL string validation alone is not a DNS rebinding or connection-level defense for arbitrary targets.
+
+## Security considerations
+
+This project intentionally avoids unsafe scanning behavior:
+
+- No arbitrary public scanning.
+- No payload-based exploit testing.
+- No password, auth, or third-party API integration.
+- No HTML crawling or content downloads during the public-check flow.
+- No redirect following in the site check.
+
+The app is designed as an evidence-focused, low-risk assessment utility, not as a general reconnaissance tool.
 
 ## Roadmap
 

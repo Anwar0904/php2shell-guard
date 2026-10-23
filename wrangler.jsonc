@@ -13,6 +13,9 @@
 	"observability": {
 		"enabled": true
 	},
+	"vars": {
+		"SCAN_ALLOWED_HOSTS": "php2shell-guard.anwar-labs.workers.dev,www.arazidigitalmedia.com"
+	},
 	"upload_source_maps": false
 	/**
 	 * Smart Placement
